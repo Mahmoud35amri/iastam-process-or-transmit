@@ -12,6 +12,7 @@ from satsched.simulator.physics import (
     apply_drops,
     discretionary_budget_wh,
     expire,
+    platform_reserve_wh,
     run_jobs,
     start_jobs,
     transmit,
@@ -139,13 +140,24 @@ def test_expire_removes_old_items_but_not_processing():
     assert set(s2.items) == {2}
 
 
-def test_update_soc_clamps_and_reports_spill():
-    soc, spilled = update_soc(79.0, SAT, solar_wh=5.0, base_wh=1.0, used_wh=1.0)
-    assert soc == SAT.battery_wh and spilled == pytest.approx(2.0)
-    soc, spilled = update_soc(1.0, SAT, solar_wh=0.0, base_wh=5.0, used_wh=0.0)
-    assert soc == 0.0 and spilled == 0.0
+def test_update_soc_clamps_and_reports_spill_and_deficit():
+    soc, spilled, deficit = update_soc(79.0, SAT, solar_wh=5.0, base_wh=1.0, used_wh=1.0)
+    assert soc == SAT.battery_wh and spilled == pytest.approx(2.0) and deficit == 0.0
+    soc, spilled, deficit = update_soc(1.0, SAT, solar_wh=0.0, base_wh=5.0, used_wh=0.0)
+    assert soc == 0.0 and spilled == 0.0 and deficit == pytest.approx(4.0)
 
 
-def test_discretionary_budget_keeps_critical_floor():
+def test_discretionary_budget_keeps_critical_floor_and_platform_reserve():
     assert discretionary_budget_wh(SAT.critical_wh, SAT, 0.0, 1.0) == 0.0
     assert discretionary_budget_wh(50.0, SAT, 2.0, 1.0) == pytest.approx(50.0 + 1.0 - SAT.critical_wh)
+    assert discretionary_budget_wh(50.0, SAT, 2.0, 1.0, platform_reserve=10.0) == pytest.approx(41.0 - SAT.critical_wh)
+
+
+def test_platform_reserve_covers_the_eclipse():
+    periodic = OrbitSchedule(period_s=5700.0, eclipse_s=2100.0, windows=())
+    in_eclipse = platform_reserve_wh(periodic, 4000.0, SAT)  # eclipse 3600..5700
+    assert in_eclipse == pytest.approx(SAT.base_load_w * 1700 / 3600)
+    before = platform_reserve_wh(periodic, 3500.0, SAT)  # 100 s of sun left
+    expected = SAT.base_load_w * 2100 / 3600 - (SAT.solar_w - SAT.base_load_w) * 100 / 3600
+    assert before == pytest.approx(expected)
+    assert platform_reserve_wh(periodic, 0.0, SAT) == 0.0  # plenty of sun left to recharge

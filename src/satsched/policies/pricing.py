@@ -60,12 +60,21 @@ def usage(book: OptionBook, choice: np.ndarray) -> np.ndarray:
     return total
 
 
+_MAX_DOUBLINGS = 60
+SATURATED_PRICE = 1e6  # prices above this mean 'no price clears the resource' (shown as saturated)
+
+
 def _price_ceiling(book: OptionBook, r: int) -> float:
-    use = book.uses[:, r, :]
-    mask = (use > _EPS) & (book.values > 0)
+    """First guess for a price that clears resource r; refined upwards by doubling.
+
+    Uses may be negative: an option can free a resource (processing shrinks what sits in storage).
+    """
+    use = np.abs(book.uses[:, r, :])
+    vals = np.abs(book.values)
+    mask = (use > _EPS) & (vals < abs(BLOCKED) / 2)
     if not mask.any():
         return 0.0
-    return float((book.values[mask] / use[mask]).max()) * 1.01
+    return float((vals[mask] / use[mask]).max()) * 1.01 + _EPS
 
 
 def _bisect_price(book: OptionBook, prices: np.ndarray, r: int, iterations: int) -> float:
@@ -78,8 +87,14 @@ def _bisect_price(book: OptionBook, prices: np.ndarray, r: int, iterations: int)
     if used(0.0) <= supply + _EPS:
         return 0.0
     hi = _price_ceiling(book, r)
-    if supply <= 0 or hi <= 0:
-        return hi
+    if hi <= 0:
+        return 0.0
+    for _ in range(_MAX_DOUBLINGS):
+        if used(hi) <= supply + _EPS:
+            break
+        hi *= 2.0
+    else:
+        return hi  # no price clears it (e.g. not enough space can be freed): saturate
     lo = hi * 1e-7
     if used(lo) <= supply + _EPS:
         return lo
@@ -171,17 +186,30 @@ def processed_footprint_frac(scenario: Scenario) -> float:
     return kept / total if total > 0 else 1.0
 
 
+def arrival_value_density(scenario: Scenario) -> float:
+    """Expected value per MB of freshly acquired raw data: what a freed megabyte is worth to the
+    storage guard (dropping an item only pays off if it is worth less per MB than what it makes room for)."""
+    value = sum(
+        k.rate_per_orbit * k.base_value * (k.p_useful + (1.0 - k.p_useful) * k.junk_value_frac)
+        for k in scenario.data_types
+    )
+    volume = sum(k.rate_per_orbit * k.raw_size_mb for k in scenario.data_types)
+    return value / volume if volume > 0 else 0.0
+
+
 def storage_reserve_mb(scenario: Scenario, guard_s: float, min_frac: float) -> float:
     """Free space to keep for data arriving before processing can shrink it."""
     return max(min_frac * scenario.satellite.storage_mb, inflow_rate_mb_s(scenario) * guard_s)
 
 
-def storage_supply_mb(obs: Observation, wait_s: float, reserve_mb: float, pipeline_mb: float) -> float:
-    """Space available to hold current items until the next pass.
+def storage_supply_mb(obs: Observation, wait_s: float, reserve_mb: float, pipeline_shrink_mb: float) -> float:
+    """Storage headroom left for data arriving before the next pass (can be negative).
 
-    Future arrivals before that pass are assumed to be processed (compact footprint); items being
-    processed right now still occupy `pipeline_mb`.
+    Items already onboard keep their footprint unless processed (which frees raw minus product
+    size); running jobs will free `pipeline_shrink_mb`. Future arrivals are assumed to be processed
+    (compact footprint). A negative value means current items must shrink or go to make room.
     """
     sc = obs.scenario
     incoming = mean_inflow_rate_mb_s(sc) * max(wait_s, 0.0) * processed_footprint_frac(sc)
-    return sc.satellite.storage_mb - reserve_mb - incoming - pipeline_mb
+    occupied = obs.storage_used_mb - pipeline_shrink_mb
+    return sc.satellite.storage_mb - reserve_mb - incoming - occupied

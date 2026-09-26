@@ -41,3 +41,22 @@ def test_processor_helpers():
     sat = get_scenario("nominal").satellite
     assert sat.slots(Processor.GPU) == 1 and sat.slots(Processor.NONE) == 0
     assert sat.power_w(Processor.CPU) == sat.cpu_core_w and sat.power_w(Processor.NONE) == 0.0
+
+
+def test_compute_starved_slows_the_gpu_but_keeps_energy_per_job():
+    nominal, slow = get_scenario("nominal"), get_scenario("compute_starved")
+    for kind in nominal.data_types:
+        slow_kind = slow.data_type(kind.name)
+        if kind.processor is Processor.GPU:
+            assert slow_kind.proc_time_s > 4 * kind.proc_time_s
+            e_nominal = nominal.satellite.gpu_w * kind.proc_time_s
+            assert slow.satellite.gpu_w * slow_kind.proc_time_s == pytest.approx(e_nominal)
+        else:
+            assert slow_kind == kind
+
+
+def test_stress_scenarios_reduce_their_named_resource():
+    nominal = get_scenario("nominal").satellite
+    assert get_scenario("energy_starved").satellite.solar_w < nominal.solar_w
+    assert get_scenario("storage_tight").satellite.storage_mb < nominal.storage_mb / 5
+    assert get_scenario("downlink_starved").orbit.downlink_mb_s < get_scenario("nominal").orbit.downlink_mb_s

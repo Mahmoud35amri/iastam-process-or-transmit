@@ -30,13 +30,13 @@ from satsched.scenarios import NOMINAL, SCENARIOS  # noqa: E402
 
 PAPER = ROOT / "docs" / "paper"
 RESULTS = ROOT / "results"
-POLICY = {"value_aware": "Value-aware (ours)", "priority_rules": "Priority rules", "process_all": "Process-all",
-          "bent_pipe": "Bent-pipe"}
+POLICY = {"value_aware": "Value-aware (ours)", "bandwidth_rules": "Bandwidth-aware rules",
+          "priority_rules": "Priority rules", "process_all": "Process-all", "bent_pipe": "Bent-pipe"}
 VARIANT = {"full_engine": "Full engine", "no_prices": "No shadow prices (all λ = 0)",
            "no_storage_price": "No storage price", "no_queue_pass": "No queue-aware re-valuation",
            "no_battery_guard": "No battery guard"}
 SCEN = {"nominal": "Nominal", "energy_starved": "Energy-starved", "downlink_starved": "Downlink-starved",
-        "storage_tight": "Storage-tight", "event_surge": "Event surge"}
+        "storage_tight": "Storage-tight", "compute_starved": "Compute-starved", "event_surge": "Event surge"}
 
 # ---------------------------------------------------------------- placeholder tables
 
@@ -121,7 +121,7 @@ def synthetic_table() -> str:
     path = RESULTS / "synthetic" / "summary.csv"
     if not path.exists():
         return "*(synthetic-geometry results not available)*"
-    summary = read_csv(path)
+    summary = [{**r, "scenario": str(r["scenario"]).removesuffix("_synthetic")} for r in read_csv(path)]
     rows = []
     for p in POLICY:
         cells = [POLICY[p]]
@@ -140,15 +140,40 @@ def paired_table() -> str:
     rows = []
     for s in SCEN:
         cells = [SCEN[s]]
-        for ref in ("priority_rules", "process_all"):
+        for ref in ("bandwidth_rules", "priority_rules", "process_all"):
             diffs = np.array([by[(s, "value_aware", k)] - by[(s, ref, k)] for k in seeds if (s, ref, k) in by])
             ci = 1.96 * diffs.std(ddof=1) / np.sqrt(len(diffs))
-            cells += [f"{diffs.mean():+.2f} ± {ci:.2f}", f"{int((diffs > 0).sum())}/{len(diffs)}"]
+            cells += [f"{diffs.mean():+.2f}±{ci:.2f}", f"{int((diffs > 0).sum())}/{len(diffs)}"]
         rows.append(cells)
-    return _table(["Scenario", "Δ vs priority rules (pts)", "Wins", "Δ vs process-all (pts)", "Wins"], rows)
+    return _table(["Scenario", "Δ vs bandwidth rules", "Wins", "Δ vs priority rules", "Wins", "Δ vs process-all",
+                   "Wins"], rows)
+
+
+BINDING = [  # (stress scenario, resource, metric, label)
+    ("energy_starved", "Energy", "min_soc_pct", "lowest battery (%)"),
+    ("downlink_starved", "Downlink", "downlink_util_pct", "pass capacity used (%)"),
+    ("storage_tight", "Storage", "storage_peak_pct", "peak storage (%)"),
+    ("compute_starved", "Compute", "gpu_util_pct", "GPU busy (%)"),
+]
+
+
+def binding_table() -> str:
+    """Scenario validation: each stress scenario's resource, nominal -> stressed, per strategy."""
+    summary = read_csv(RESULTS / "summary.csv")
+    by = {(r["scenario"], r["policy"]): r for r in summary}
+    pols = ("process_all", "priority_rules", "bandwidth_rules", "value_aware")
+    rows = []
+    for scen, resource, metric, label in BINDING:
+        cells = [SCEN[scen], f"{resource}: {label}"]
+        for p in pols:
+            cells.append(f"{float(by[('nominal', p)][metric]):.0f} → **{float(by[(scen, p)][metric]):.0f}**")
+        rows.append(cells)
+    return _table(["Scenario", "Binding resource", "Process-all", "Priority rules", "Bandwidth rules", "Value-aware"],
+                  rows)
 
 
 PLACEHOLDERS = {
+    "binding_table": binding_table,
     "synthetic_table": synthetic_table,
     "paired_table": paired_table,
     "results_table": results_table,

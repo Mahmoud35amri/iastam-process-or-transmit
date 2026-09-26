@@ -14,14 +14,15 @@ from matplotlib.patches import FancyArrowPatch, FancyBboxPatch  # noqa: E402
 from satsched.models import Stage  # noqa: E402
 from satsched.simulator.engine import RunResult  # noqa: E402
 
-# Fixed entity -> colour mapping (reference palette slots 1-4, validated adjacent-pair CVD safe).
-POLICY_COLORS = {"value_aware": "#2a78d6", "priority_rules": "#eb6834", "process_all": "#1baf7a", "bent_pipe": "#eda100"}
+# Fixed entity -> colour mapping (reference palette slots 1-5 in order, validated adjacent-pair CVD safe).
+POLICY_COLORS = {"value_aware": "#2a78d6", "priority_rules": "#eb6834", "process_all": "#1baf7a", "bent_pipe": "#eda100",
+                 "bandwidth_rules": "#e87ba4"}
 POLICY_LABELS = {"value_aware": "Value-aware (ours)", "priority_rules": "Priority rules",
-                 "process_all": "Process-all", "bent_pipe": "Bent-pipe"}
-POLICY_ORDER = ["value_aware", "priority_rules", "process_all", "bent_pipe"]
+                 "process_all": "Process-all", "bent_pipe": "Bent-pipe", "bandwidth_rules": "Bandwidth-aware rules"}
+POLICY_ORDER = ["value_aware", "priority_rules", "process_all", "bent_pipe", "bandwidth_rules"]
 SCENARIO_LABELS = {"nominal": "Nominal", "energy_starved": "Energy-\nstarved", "downlink_starved": "Downlink-\nstarved",
-                   "storage_tight": "Storage-\ntight", "event_surge": "Event\nsurge"}
-SCENARIO_ORDER = ["nominal", "energy_starved", "downlink_starved", "storage_tight", "event_surge"]
+                   "storage_tight": "Storage-\ntight", "compute_starved": "Compute-\nstarved", "event_surge": "Event\nsurge"}
+SCENARIO_ORDER = ["nominal", "energy_starved", "downlink_starved", "storage_tight", "compute_starved", "event_surge"]
 INK, INK_2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3de", "#fcfcfb"
 ECLIPSE, CONTACT = "#ecebe7", "#cde2fb"
 
@@ -39,18 +40,19 @@ def _style() -> None:
 def _grouped_bars(ax, summary: list[dict], metric: str, ylabel: str, label_fmt: str = "{:.0f}") -> None:
     by = {(r["scenario"], r["policy"]): r for r in summary}
     scenarios = [s for s in SCENARIO_ORDER if any(k[0] == s for k in by)]
-    width = 0.19
+    policies = [p for p in POLICY_ORDER if any(k[1] == p for k in by)]
+    width = 0.84 / len(policies)
     x = np.arange(len(scenarios))
-    for j, pol in enumerate(POLICY_ORDER):
+    for j, pol in enumerate(policies):
         vals = [float(by[(s, pol)][metric]) if (s, pol) in by else np.nan for s in scenarios]
         errs = [float(by[(s, pol)].get(f"{metric}_ci95", 0) or 0) if (s, pol) in by else 0 for s in scenarios]
-        pos = x + (j - 1.5) * (width + 0.02)
+        pos = x + (j - (len(policies) - 1) / 2) * width
         ax.bar(pos, vals, width, color=POLICY_COLORS[pol], label=POLICY_LABELS[pol], edgecolor=SURFACE, linewidth=1)
         ax.errorbar(pos, vals, yerr=errs, fmt="none", ecolor=INK_2, elinewidth=1, capsize=2)
         pad = ax.get_ylim()[1] * 0.012
         for p, v, e in zip(pos, vals, errs):
             if np.isfinite(v):
-                ax.text(p, v + e + pad, label_fmt.format(v), ha="center", va="bottom", fontsize=7, color=INK_2)
+                ax.text(p, v + e + pad, label_fmt.format(v), ha="center", va="bottom", fontsize=5.5, color=INK_2)
     ax.set_xticks(x, [SCENARIO_LABELS.get(s, s) for s in scenarios])
     ax.set_ylabel(ylabel)
     ax.grid(axis="x", visible=False)
@@ -58,11 +60,11 @@ def _grouped_bars(ax, summary: list[dict], metric: str, ylabel: str, label_fmt: 
 
 def fig_metric_by_scenario(summary: list[dict], metric: str, ylabel: str, title: str, path: Path) -> Path:
     _style()
-    fig, ax = plt.subplots(figsize=(8.2, 3.8))
+    fig, ax = plt.subplots(figsize=(9.6, 3.9))
     ax.set_ylim(0, max(float(r[metric]) for r in summary) * 1.18)
     _grouped_bars(ax, summary, metric, ylabel)
     ax.set_title(title, loc="left")
-    ax.legend(ncol=4, loc="upper center", bbox_to_anchor=(0.5, -0.16), fontsize=9)
+    ax.legend(ncol=5, loc="upper center", bbox_to_anchor=(0.5, -0.16), fontsize=8.5)
     fig.tight_layout()
     fig.savefig(path, dpi=200)
     plt.close(fig)

@@ -65,6 +65,7 @@ def _energy(run: RunResult, value: float) -> dict[str, float]:
         "min_soc_pct": _pct(float(s["soc_wh"].min()), sat.battery_wh),
         "time_below_reserve_pct": 100.0 * float(np.mean(s["soc_wh"] < sat.reserve_wh - 1e-9)),
         "spilled_solar_wh": float(s["spilled_wh"].sum()),
+        "brownout_wh": float(s["energy_deficit_wh"].sum()),
         "stalled_job_steps": float(s["stalled_jobs"].sum()),
     }
 

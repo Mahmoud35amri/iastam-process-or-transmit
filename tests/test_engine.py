@@ -56,6 +56,7 @@ def test_physical_invariants_hold(send_run):
     assert np.all(s["storage_mb"] <= sat.storage_mb + 1e-6)
     assert np.all(s["dl_sent_mb"] <= s["dl_capacity_mb"] + 1e-6)
     assert np.all(s["dl_capacity_mb"][s["in_contact"] == 0] == 0)
+    assert s["energy_deficit_wh"].sum() == 0  # load shedding keeps the platform powered
 
 
 def test_deliveries_happen_only_during_contact(send_run):
@@ -78,3 +79,13 @@ def test_events_log_terminal_outcomes(send_run):
     terminal = sum(1 for i in send_run.items if not i.active)
     logged = sum(1 for e in send_run.events if e.action in {"delivered", "overflow", "dropped", "discarded", "expired"})
     assert logged == terminal
+
+
+def test_power_system_prevents_brownouts_even_for_a_greedy_policy():
+    from satsched.policies.baselines import ProcessAll
+
+    starved = replace(get_scenario("energy_starved"), duration_s=24 * 3600.0)
+    run = run_simulation(starved, ProcessAll(), seed=1)
+    sat = starved.satellite
+    assert run.series["energy_deficit_wh"].sum() == 0
+    assert run.series["soc_wh"].min() >= sat.critical_wh - 1e-6

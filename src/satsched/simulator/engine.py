@@ -18,7 +18,7 @@ FORECAST_EXTRA_S = 86400.0  # schedule generated beyond the run so forecasts nev
 
 SERIES_KEYS = (
     "time_s", "soc_wh", "storage_mb", "sunlit", "in_contact", "cpu_busy_s", "gpu_busy_s",
-    "energy_proc_wh", "energy_radio_wh", "spilled_wh", "dl_capacity_mb", "dl_sent_mb",
+    "energy_proc_wh", "energy_radio_wh", "spilled_wh", "energy_deficit_wh", "dl_capacity_mb", "dl_sent_mb",
     "n_raw", "n_processing", "n_product", "value_cum", "stalled_jobs", "started_jobs",
 )
 
@@ -105,10 +105,11 @@ def run_simulation(scenario: Scenario, policy: Policy, seed: int) -> RunResult:
         started_kinds = {i: storage.items[i].kind for i in started}
         solar_wh = sat.solar_w * schedule.sunlit_seconds(t, t + dt) / 3600.0
         base_wh = sat.base_load_w * dt / 3600.0
-        budget = ph.discretionary_budget_wh(soc, sat, solar_wh, base_wh)
+        reserve = ph.platform_reserve_wh(schedule, t + dt, sat)
+        budget = ph.discretionary_budget_wh(soc, sat, solar_wh, base_wh, reserve)
         jobs = ph.run_jobs(storage, t, dt, scenario, workload.truth, budget)
         tx = ph.transmit(jobs.storage, plan.downlink, t, dt, schedule, workload.truth, scenario, budget - jobs.energy_wh)
-        soc, spilled = ph.update_soc(soc, sat, solar_wh, base_wh, jobs.energy_wh + tx.energy_wh)
+        soc, spilled, deficit = ph.update_soc(soc, sat, solar_wh, base_wh, jobs.energy_wh + tx.energy_wh)
         storage, expired = ph.expire(tx.storage, t + dt, scenario)
 
         finished += lost + dropped + jobs.discarded + tx.delivered + expired
@@ -123,7 +124,8 @@ def run_simulation(scenario: Scenario, policy: Policy, seed: int) -> RunResult:
             "time_s": t, "soc_wh": soc, "storage_mb": storage.used_mb, "sunlit": float(schedule.is_sunlit(t)),
             "in_contact": float(tx.capacity_mb > 0), "cpu_busy_s": jobs.busy_s[Processor.CPU],
             "gpu_busy_s": jobs.busy_s[Processor.GPU], "energy_proc_wh": jobs.energy_wh,
-            "energy_radio_wh": tx.energy_wh, "spilled_wh": spilled, "dl_capacity_mb": tx.capacity_mb,
+            "energy_radio_wh": tx.energy_wh, "spilled_wh": spilled, "energy_deficit_wh": deficit,
+            "dl_capacity_mb": tx.capacity_mb,
             "dl_sent_mb": tx.sent_mb, "n_raw": n_raw, "n_processing": n_proc, "n_product": n_prod,
             "value_cum": value_cum, "stalled_jobs": jobs.stalled, "started_jobs": len(started),
         }

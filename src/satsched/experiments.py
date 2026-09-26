@@ -31,7 +31,8 @@ HEADLINE = [
     "time_below_reserve_pct", "latency_mean_min", "latency_p95_min", "alert_latency_mean_min",
     "alerts_delivered_pct", "gpu_util_pct", "cpu_util_pct", "downlink_util_pct", "storage_mean_pct",
     "storage_peak_pct", "overflow_pct", "dropped_pct", "expired_pct", "discarded_onboard_pct",
-    "processed_onboard_pct", "sent_raw_pct", "backlog_pct", "spilled_solar_wh",
+    "processed_onboard_pct", "sent_raw_pct", "backlog_pct", "spilled_solar_wh", "brownout_wh",
+    "stalled_job_steps", "delivered_pct",
 ]
 MARKDOWN_METRICS = [
     "value_score_pct", "completion_rate_pct", "energy_total_wh", "min_soc_pct", "latency_mean_min",

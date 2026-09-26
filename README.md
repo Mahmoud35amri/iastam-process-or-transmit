@@ -20,34 +20,48 @@ period, from its CelesTrak TLE of 26 Sep 2026. The orbit is propagated with SGP4
 - **Eclipses:** computed from the JPL DE421 ephemeris, about 34 min per orbit.
 - **Seeds:** each seed simulates a different real day.
 
-The satellite's resources, instruments and value model are illustrative.
+The satellite's resources, instruments and value model are illustrative. The power system sheds processing and radio
+loads so that the platform always survives the next eclipse.
 
-## Results (20 real days per cell, mean ± 95% CI)
+**Scenarios.** Stress levels follow one rule, set on tuning days only (`tools/calibrate_scenarios.py`): each stress
+scenario offers **2/3 of what "process everything" needs** of its resource.
 
-| Scenario | Value-aware (ours) | Priority rules | Process-all | Bent-pipe | Energy vs rules |
+| Scenario | Stress level |
+|---|---|
+| Nominal | no stress |
+| Energy-starved | 44.8 W solar array |
+| Storage-tight | 2.85 GB of mass memory |
+| Compute-starved | an accelerator 4.72× slower |
+| Downlink-starved | passes above 20° only, at half rate |
+| Event surge | 5× more urgent events |
+
+## Results (value captured, % of ideal; 20 real days per cell, mean ± 95% CI)
+
+| Scenario | Value-aware (ours) | Bandwidth rules | Priority rules | Process-all | Bent-pipe |
 |---|---|---|---|---|---|
-| Nominal | **43.6 ± 1.2 %** | 41.1 ± 1.2 % | 40.7 ± 1.2 % | 5.2 ± 0.3 % | −22 % |
-| Energy-starved | **43.3 ± 1.2 %** | 41.0 ± 1.3 % | 27.2 ± 3.5 % | 5.2 ± 0.3 % | −13 % |
-| Downlink-starved | **33.2 ± 1.6 %** | 27.6 ± 2.7 % | 25.3 ± 2.6 % | 1.1 ± 0.1 % | −2 % |
-| Storage-tight | 41.0 ± 1.2 % | 41.1 ± 1.2 % | 40.7 ± 1.2 % | 11.1 ± 0.5 % | −34 % |
-| Event surge | **31.1 ± 1.3 %** | 30.2 ± 1.3 % | 29.3 ± 1.2 % | 2.0 ± 0.1 % | −21 % |
+| Nominal | **43.6 ± 1.2** | 41.9 ± 1.2 | 41.1 ± 1.2 | 40.7 ± 1.2 | 5.2 ± 0.3 |
+| Energy-starved | **42.5 ± 1.2** | 38.3 ± 1.7 | 37.6 ± 1.8 | 22.2 ± 2.3 | 5.2 ± 0.3 |
+| Downlink-starved | **33.2 ± 1.6** | 27.4 ± 2.6 | 27.6 ± 2.7 | 25.3 ± 2.6 | 1.1 ± 0.1 |
+| Storage-tight | 36.9 ± 1.1 | 31.5 ± 1.2 | 37.1 ± 1.2 | **38.4 ± 1.1** | 10.6 ± 0.6 |
+| Compute-starved | **38.7 ± 1.3** | 35.1 ± 1.5 | 36.1 ± 1.7 | 27.7 ± 1.3 | 5.2 ± 0.3 |
+| Event surge | **31.1 ± 1.3** | 30.5 ± 1.3 | 30.2 ± 1.3 | 29.3 ± 1.2 | 2.0 ± 0.1 |
 
-*Value captured, as % of the ideal value (instant delivery, unlimited resources). The ideal is unreachable by design:
-most urgent events occur hours away from any ground pass.*
+*The ideal value assumes instant delivery and unlimited resources. It is unreachable by design: most urgent events
+occur hours away from any ground pass.*
 
-- **Best decision quality in 4 of 5 scenarios.** Compared day by day, the engine beats both processing baselines on
-  all 20 days in four scenarios. It captures 3–21 % more value than a hand-tuned rule set and 6–59 % more than
-  "process everything". With only 8 GB of storage it ties the rule set (−0.1 ± 0.4 points), using 34 % less energy.
-- **Less energy.** It spends 2–35 % less discretionary energy than the processing baselines (−22 % in the nominal case).
-- **Protects the battery.** In the energy-starved case, process-all drops to a mean lowest charge of 4 % and spends
-  43 % of the day below the reserve. The engine keeps a mean lowest charge of 35 % and is below the 30 % reserve only
-  1.1 % of the time.
-- **Trade-off.** It delivers the most items in every scenario, yet its *completion rate* (delivered + filtered
-  onboard) is 2–9 points lower than the rule set's. It drops items that can no longer reach the ground before their
-  deadline instead of letting them expire, and it sends raw data when bandwidth allows instead of filtering it. See
-  the paper for the discussion.
-- **Robust.** With a synthetic geometry (95-min orbit, 6 fixed passes/day) the engine ranks first in all 5
-  scenarios; see `results/synthetic/`.
+- **Best decision quality in 5 of 6 scenarios.** The engine captures 2–20 % more value than the best baseline in
+  each. Compared day by day, it beats every processing baseline on 18–20 of the 20 days in each of those scenarios.
+- **Where it does not win.** When mass memory is the bottleneck, processing everything immediately is best
+  (38.4 % vs 36.9 %). There the engine ties the rule set and beats the bandwidth-aware rules.
+- **Less energy.** It spends 2–22 % less discretionary energy than the rule set and process-all (−22 % in the nominal
+  case).
+- **Protects the battery.** When energy-starved, process-all hits the load-shedding floor (10 %) and spends 55 % of
+  the day below the reserve. The engine keeps a mean lowest charge of 28 %, and no strategy ever causes a power
+  failure.
+- **Trade-off.** Its *completion rate* (delivered + filtered onboard) is higher than the rules' when energy or
+  storage is short, but 2–9 points lower otherwise. It drops items that can no longer reach the ground before their
+  deadline, and it sends raw data when bandwidth allows instead of filtering it.
+- **Robust.** The same ranking holds with a synthetic geometry (`results/synthetic/`).
 
 The full tables are in [`results/summary.md`](results/summary.md). The per-run metrics are in `results/runs.csv`, and
 the ablation results in `results/ablation_*`.
@@ -78,7 +92,7 @@ python -m pytest --cov             # tests with coverage
 
 python -m satsched.cli geometry                            # (optional) recompute passes + eclipses from the TLE
 python -m satsched.cli run --scenario energy_starved --policy value_aware --seed 0   # one simulated (real) day
-python -m satsched.cli bench --seeds 20 --out results       # 5 scenarios x 4 strategies x 20 seeds (~1.5 min on 16 cores)
+python -m satsched.cli bench --seeds 20 --out results       # 6 scenarios x 5 strategies x 20 seeds (~2 min on 16 cores)
 python -m satsched.cli ablation --seeds 20 --out results    # engine with components switched off
 python -m satsched.cli dataset --seeds 3 --out data         # export the benchmark dataset
 python -m satsched.cli figures --out docs/figures           # paper / poster figures
@@ -129,8 +143,10 @@ tests/                       unit + integration tests (pytest, ~99 % coverage of
 
 ## Evaluation protocol
 
-- **Scenarios:** nominal, energy-starved, downlink-starved (20° mask, half rate), storage-tight, event surge, on the
-  real geometry (`src/satsched/scenarios.py`). The same five also exist with a synthetic geometry (`*_synthetic`).
+- **Scenarios:** nominal, energy-starved, downlink-starved (20° mask, half rate), storage-tight, compute-starved and
+  event surge, on the real geometry (`src/satsched/scenarios.py`). Stress levels come from
+  `tools/calibrate_scenarios.py`. The same six also exist with a synthetic geometry (`*_synthetic`).
+- **Baselines:** bent-pipe, process-all, priority rules, and bandwidth-aware rules (`src/satsched/policies/baselines.py`).
 - **Seeds:** engine parameters were tuned on seeds 1000–1003 only (real days 24–27). All reported results use seeds
   0–19 (real days 26 Sep–15 Oct 2026). Every strategy sees the same passes and the same data for a given seed.
 - **Metrics, grouped by the five criteria of the brief:**

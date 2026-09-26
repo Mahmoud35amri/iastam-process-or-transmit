@@ -16,7 +16,7 @@ data/
   orbit/
     sentinel2a.tle                   the TLE used (3-line format)
     sentinel2a_toulouse/             62 days of real geometry: geometry.json (provenance), passes.csv, eclipses.csv
-  scenarios.json                     all parameters of the 5 scenarios (satellite, orbit, data types)
+  scenarios.json                     all parameters of the 6 scenarios (satellite, orbit, data types)
   <scenario>/seed_<NNN>/
     items.csv                        every data item acquired during the 24 h run
     contact_windows.csv              ground-station passes (downlink opportunities)

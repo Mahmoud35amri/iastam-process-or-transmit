@@ -6,6 +6,7 @@ enforces every hard constraint regardless of what a policy asks for.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Iterable, Mapping
@@ -195,13 +196,40 @@ def expire(storage: Storage, t: float, scenario: Scenario) -> tuple[Storage, lis
     return storage.updated(removed=[e.id for e in expired]), expired
 
 
-def discretionary_budget_wh(soc_wh: float, sat: SatelliteConfig, solar_wh: float, base_wh: float) -> float:
-    """Energy available this step for processing and radio without breaching the critical floor."""
-    return max(soc_wh + solar_wh - base_wh - sat.critical_wh, 0.0)
+def platform_reserve_wh(schedule: OrbitSchedule, t: float, sat: SatelliteConfig) -> float:
+    """Battery energy the platform (base load) still needs to get through the current or next eclipse.
+
+    In sunlight, the solar surplus expected before the eclipse starts is credited against that need.
+    """
+    if not schedule.is_sunlit(t):
+        return sat.base_load_w * (schedule.next_sunrise(t) - t) / 3600.0
+    start = schedule.next_eclipse_start(t)
+    if not math.isfinite(start):
+        return 0.0
+    need = sat.base_load_w * (schedule.next_sunrise(start) - start) / 3600.0
+    surplus = max(sat.solar_w - sat.base_load_w, 0.0) * (start - t) / 3600.0
+    return max(need - surplus, 0.0)
 
 
-def update_soc(soc_wh: float, sat: SatelliteConfig, solar_wh: float, base_wh: float, used_wh: float) -> tuple[float, float]:
-    """Returns (new state of charge, solar energy spilled because the battery is full)."""
+def discretionary_budget_wh(
+    soc_wh: float, sat: SatelliteConfig, solar_wh: float, base_wh: float, platform_reserve: float = 0.0
+) -> float:
+    """Energy the power system lets processing and radio use this step (load shedding).
+
+    Loads are shed before the battery would drop below the critical floor plus the energy the
+    platform needs to survive the next eclipse, so the base load can always be supplied.
+    """
+    return max(soc_wh + solar_wh - base_wh - sat.critical_wh - platform_reserve, 0.0)
+
+
+def update_soc(
+    soc_wh: float, sat: SatelliteConfig, solar_wh: float, base_wh: float, used_wh: float
+) -> tuple[float, float, float]:
+    """Returns (new state of charge, solar energy spilled because the battery is full, unmet load).
+
+    Unmet load (a brownout) means the platform itself lost power; it must stay zero.
+    """
     raw = soc_wh + solar_wh - base_wh - used_wh
     spilled = max(raw - sat.battery_wh, 0.0)
-    return min(max(raw, 0.0), sat.battery_wh), spilled
+    deficit = max(-raw, 0.0)
+    return min(max(raw, 0.0), sat.battery_wh), spilled, deficit

@@ -59,9 +59,13 @@ class PriorityRules:
             and i.sent_mb == 0
             and soc_frac >= self.MIN_SOC_TO_PROCESS.get(i.kind, 1.0)
         ]
-        ready = [i.id for i in ranked if i.stage is Stage.PRODUCT or (i.stage is Stage.RAW and not types[i.kind].processable)]
+        ready = self._ready(obs, ranked)
         spare_fill = [i.id for i in ranked if i.stage is Stage.RAW and types[i.kind].processable]
         return Plan(process=tuple(process), downlink=tuple(ready + spare_fill), drop=self._drops(obs, ranked))
+
+    def _ready(self, obs: Observation, ranked: list[DataItem]) -> list[int]:
+        types = obs.types
+        return [i.id for i in ranked if i.stage is Stage.PRODUCT or (i.stage is Stage.RAW and not types[i.kind].processable)]
 
     def _drops(self, obs: Observation, ranked: list[DataItem]) -> tuple[int, ...]:
         capacity = obs.scenario.satellite.storage_mb
@@ -79,3 +83,48 @@ class PriorityRules:
             dropped.append(it.id)
             excess -= it.size_mb
         return tuple(dropped)
+
+
+class BandwidthRules(PriorityRules):
+    """Priority rules plus bandwidth awareness, as a careful operator would configure them.
+
+    Products of imaging instruments lose science (retention < 1). When the next passes have spare
+    capacity, hyperspectral cubes and optical images forecast to be useful (e.g. clear-sky) are
+    therefore kept raw, highest priority first, up to FILL of the forecast pass capacity and at most
+    STORAGE_SHARE of the mass memory; the rest are processed as in PriorityRules.
+    """
+
+    name = "bandwidth_rules"
+    RAW_WORTHY = ("hyperspectral_cube", "optical_image")
+    MIN_P_USEFUL = 0.7
+    FILL = 0.8
+    STORAGE_SHARE = 0.5
+    HORIZON_PASSES = 2
+
+    def decide(self, obs: Observation) -> Plan:
+        base = super().decide(obs)
+        ranked = sorted(obs.items, key=self._rank)
+        ready = self._ready(obs, ranked)
+        upcoming = obs.schedule.windows_between(obs.time_s, float("inf"))[: self.HORIZON_PASSES]
+        capacity = sum((w.end_s - max(w.start_s, obs.time_s)) * w.rate_mb_s for w in upcoming)
+        by_id = {i.id: i for i in obs.items}
+        budget = min(
+            self.FILL * capacity - sum(by_id[i].remaining_mb for i in ready),
+            self.STORAGE_SHARE * obs.scenario.satellite.storage_mb,
+        )
+        dropped = set(base.drop)
+        keep_raw: list[int] = []
+        for it in ranked:
+            if (
+                it.stage is Stage.RAW
+                and it.kind in self.RAW_WORTHY
+                and it.p_useful >= self.MIN_P_USEFUL
+                and it.id not in dropped
+                and it.remaining_mb <= budget
+            ):
+                keep_raw.append(it.id)
+                budget -= it.remaining_mb
+        keep, ready_set = set(keep_raw), set(ready)
+        process = tuple(i for i in base.process if i not in keep)
+        rest = [i for i in base.downlink if i not in keep and i not in ready_set]
+        return Plan(process=process, downlink=tuple(ready + keep_raw + rest), drop=base.drop)

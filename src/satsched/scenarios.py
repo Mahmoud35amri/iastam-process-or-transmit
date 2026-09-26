@@ -58,14 +58,28 @@ def _with_types(scenario: Scenario, **changes: dict) -> tuple[DataType, ...]:
     return tuple(replace(k, **changes[k.name]) if k.name in changes else k for k in scenario.data_types)
 
 
+# Stress levels from tools/calibrate_scenarios.py: each stress scenario offers 2/3 of what the
+# process-all reference strategy needs of its resource in the nominal scenario (tuning seeds only).
+STARVED_SOLAR_W = 44.8
+TIGHT_STORAGE_MB = 2851.0
+GPU_SLOWDOWN = 4.72
+
+
+def _slow_gpu(scenario: Scenario, factor: float) -> tuple[DataType, ...]:
+    return tuple(
+        replace(k, proc_time_s=k.proc_time_s * factor) if k.processor is Processor.GPU else k
+        for k in scenario.data_types
+    )
+
+
 def _family(base: Scenario, suffix: str, starved_orbit: OrbitConfig) -> dict[str, Scenario]:
-    """The five benchmark scenarios built around one base (orbit geometry) configuration."""
+    """The six benchmark scenarios built around one base (orbit geometry) configuration."""
     variants = {
         "nominal": base,
         "energy_starved": replace(
             base,
-            description="Degraded solar array and smaller battery: processing everything is not affordable.",
-            satellite=replace(base.satellite, solar_w=46.0, battery_wh=60.0),
+            description=f"Degraded {STARVED_SOLAR_W:g} W solar array and 60 Wh battery: energy for 2/3 of the processing demand.",
+            satellite=replace(base.satellite, solar_w=STARVED_SOLAR_W, battery_wh=60.0),
         ),
         "downlink_starved": replace(
             base,
@@ -74,8 +88,14 @@ def _family(base: Scenario, suffix: str, starved_orbit: OrbitConfig) -> dict[str
         ),
         "storage_tight": replace(
             base,
-            description="Only 8 GB of mass memory: storing raw data for later is expensive.",
-            satellite=replace(base.satellite, storage_mb=8000.0),
+            description=f"{TIGHT_STORAGE_MB / 1000:.2f} GB of mass memory: 2/3 of what processing everything needs.",
+            satellite=replace(base.satellite, storage_mb=TIGHT_STORAGE_MB),
+        ),
+        "compute_starved": replace(
+            base,
+            description=f"A {GPU_SLOWDOWN:g}x slower low-power accelerator (same energy per job): GPU time for 2/3 of the demand.",
+            satellite=replace(base.satellite, gpu_w=base.satellite.gpu_w / GPU_SLOWDOWN),
+            data_types=_slow_gpu(base, GPU_SLOWDOWN),
         ),
         "event_surge": replace(
             base,

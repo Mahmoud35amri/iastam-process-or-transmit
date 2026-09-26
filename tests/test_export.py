@@ -42,7 +42,7 @@ def test_export_dataset_matches_simulation_environment(tmp_path):
 
 def test_build_demo_payload_has_all_policies(tmp_path):
     payload = build_demo("nominal", seed=2, every=8, decision_limit=50)
-    assert set(payload["policies"]) == {"bent_pipe", "process_all", "priority_rules", "value_aware"}
+    assert set(payload["policies"]) == {"bent_pipe", "process_all", "priority_rules", "bandwidth_rules", "value_aware"}
     va = payload["policies"]["value_aware"]
     assert len(va["series"]["t_min"]) == len(va["series"]["dl_sent_mb"])
     assert 0 < len(payload["decisions"]) <= 50

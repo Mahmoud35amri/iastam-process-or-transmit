@@ -19,6 +19,7 @@
     --s-priority_rules: #eb6834;
     --s-process_all: #1baf7a;
     --s-bent_pipe: #eda100;
+    --s-bandwidth_rules: #e87ba4;
     --chip-process: #dcebfc;
     --chip-transmit: #e3f4ec;
     --chip-drop: #eeeae4;
@@ -45,6 +46,7 @@
       --s-priority_rules: #d95926;
       --s-process_all: #199e70;
       --s-bent_pipe: #c98500;
+      --s-bandwidth_rules: #d55181;
       --chip-process: #16304f;
       --chip-transmit: #143328;
       --chip-drop: #2a2824;
@@ -68,6 +70,7 @@
     --s-priority_rules: #d95926;
     --s-process_all: #199e70;
     --s-bent_pipe: #c98500;
+    --s-bandwidth_rules: #d55181;
     --chip-process: #16304f;
     --chip-transmit: #143328;
     --chip-drop: #2a2824;
@@ -298,10 +301,10 @@
       '<p class="panel">Data file <code>data.js</code> is missing. Generate it with <code>python -m satsched.cli demo</code>.</p>');
     return;
   }
-  const POLICIES = ["value_aware", "priority_rules", "process_all", "bent_pipe"];
-  const LABEL = { value_aware: "Value-aware (ours)", priority_rules: "Priority rules", process_all: "Process-all", bent_pipe: "Bent-pipe" };
-  const SHORT = { value_aware: "Value-aware", priority_rules: "Priority rules", process_all: "Process-all", bent_pipe: "Bent-pipe" };
-  const SCEN = { nominal: "Nominal", energy_starved: "Energy-starved", downlink_starved: "Downlink-starved", storage_tight: "Storage-tight", event_surge: "Event surge" };
+  const POLICIES = ["value_aware", "priority_rules", "process_all", "bent_pipe", "bandwidth_rules"];
+  const LABEL = { value_aware: "Value-aware (ours)", priority_rules: "Priority rules", process_all: "Process-all", bent_pipe: "Bent-pipe", bandwidth_rules: "Bandwidth-aware rules" };
+  const SHORT = { value_aware: "Value-aware", priority_rules: "Priority rules", process_all: "Process-all", bent_pipe: "Bent-pipe", bandwidth_rules: "Bandwidth rules" };
+  const SCEN = { nominal: "Nominal", energy_starved: "Energy-starved", downlink_starved: "Downlink-starved", storage_tight: "Storage-tight", compute_starved: "Compute-starved", event_surge: "Event surge" };
   const METRICS = [
     { key: "value_score_pct", label: "Value captured", unit: "% of ideal", better: "higher", fmt: 1 },
     { key: "energy_total_wh", label: "Energy used", unit: "Wh / day", better: "lower", fmt: 0 },
@@ -316,7 +319,7 @@
   const tplus = (min) => { const m = Math.max(0, Math.round(min)); return `T+${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
   const fmt = (v, d) => (v === null || v === undefined || Number.isNaN(+v)) ? "—" : (+v).toFixed(d);
 
-  const state = { scenario: "nominal", metric: "value_score_pct", shown: new Set(["value_aware", "priority_rules", "process_all"]), cursor: 360, playing: false, actions: "all", typePolicy: "value_aware" };
+  const state = { scenario: "nominal", metric: "value_score_pct", shown: new Set(["value_aware", "priority_rules", "process_all", "bandwidth_rules"]), cursor: 360, playing: false, actions: "all", typePolicy: "value_aware" };
   try { const saved = JSON.parse(localStorage.getItem("triage-console") || "{}"); if (saved.scenario && SCEN[saved.scenario]) state.scenario = saved.scenario; if (saved.metric) state.metric = saved.metric; } catch (e) { /* storage unavailable */ }
   const remember = () => { try { localStorage.setItem("triage-console", JSON.stringify({ scenario: state.scenario, metric: state.metric })); } catch (e) { /* ignore */ } };
 
@@ -367,11 +370,12 @@
     }).join("");
     document.getElementById("metric-note").textContent = `${m.label} (${m.unit}), ${m.better} is better. Bars: mean over ${rows[0].r.n_seeds || 20} seeds; whiskers: 95% confidence interval.`;
     const ours = row(state.scenario, "value_aware");
-    const baselines = ["priority_rules", "process_all", "bent_pipe"].map((p) => row(state.scenario, p)).filter(Boolean);
+    const baselines = ["priority_rules", "process_all", "bent_pipe", "bandwidth_rules"].map((p) => row(state.scenario, p)).filter(Boolean);
     const bestBase = baselines.reduce((a, b) => (+b.value_score_pct > +a.value_score_pct ? b : a));
     const gain = 100 * (ours.value_score_pct - bestBase.value_score_pct) / bestBase.value_score_pct;
     const eSave = 100 * (1 - ours.energy_total_wh / bestBase.energy_total_wh);
-    document.getElementById("verdict").innerHTML = `In the <b>${SCEN[state.scenario].toLowerCase()}</b> scenario the value-aware engine captures <b>${gain >= 0 ? "+" : ""}${gain.toFixed(1)}%</b> more value than the best baseline (${SHORT[bestBase.policy].toLowerCase()}) while using <b>${eSave.toFixed(0)}%</b> ${eSave >= 0 ? "less" : "more"} energy.`;
+    const valueText = gain >= 0 ? `<b>${gain.toFixed(1)}%</b> more value` : `<b>${Math.abs(gain).toFixed(1)}%</b> less value`;
+    document.getElementById("verdict").innerHTML = `In the <b>${SCEN[state.scenario].toLowerCase()}</b> scenario the value-aware engine captures ${valueText} than the best baseline (${SHORT[bestBase.policy].toLowerCase()}), using <b>${Math.abs(eSave).toFixed(0)}%</b> ${eSave >= 0 ? "less" : "more"} energy.`;
     document.getElementById("scenario-desc").textContent = (D.scenarios && D.scenarios[state.scenario]) || "";
     const cols = [["value_score_pct", "Value %", 1], ["completion_rate_pct", "Done %", 1], ["energy_total_wh", "Wh", 0], ["min_soc_pct", "Min batt %", 0], ["alert_latency_mean_min", "Alert min", 0], ["storage_peak_pct", "Peak stor %", 0]];
     document.getElementById("bench-table").innerHTML = `<thead><tr><th>Strategy</th>${cols.map((c) => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +

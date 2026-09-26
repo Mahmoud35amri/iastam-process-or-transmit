@@ -28,7 +28,7 @@ def observe(items, t=0.0, soc=64.0, scenario=SCN, used=None):
 
 
 def test_registry_builds_every_policy():
-    assert set(POLICY_NAMES) == {"bent_pipe", "process_all", "priority_rules", "value_aware"}
+    assert set(POLICY_NAMES) == {"bent_pipe", "process_all", "priority_rules", "bandwidth_rules", "value_aware"}
     for name in POLICY_NAMES:
         assert make_policy(name).name == name
     with pytest.raises(KeyError):
@@ -121,3 +121,54 @@ def test_value_aware_storage_guard_frees_space():
     plan = ValueAwarePolicy().decide(observe(items, t=100.0, scenario=tight))
     assert plan.drop
     assert plan.drop[0] == 0  # lowest expected value density goes first
+
+
+def test_bandwidth_rules_send_raw_when_passes_have_room():
+    from satsched.policies.baselines import BandwidthRules
+
+    items = [mk(1, "hyperspectral_cube", p=0.9), mk(2, "optical_image", p=0.8), mk(3, "event_candidate"),
+             mk(4, "optical_image", p=0.3)]
+    plan = BandwidthRules().decide(observe(items, t=0.0, soc=0.9 * SAT.battery_wh))
+    assert 1 not in plan.process and 2 not in plan.process  # plenty of pass capacity: keep them raw
+    assert 3 in plan.process  # events are still processed onboard
+    assert 4 in plan.process  # likely cloudy: processing filters it
+    assert plan.downlink.index(1) < plan.downlink.index(2)  # hyperspectral first (loses most when processed)
+
+
+def test_bandwidth_rules_fall_back_to_processing_when_passes_are_full():
+    from satsched.policies.baselines import BandwidthRules
+
+    many = [mk(i, "optical_image", p=0.8, created=float(i)) for i in range(60)]  # 18 GB vs 11 GB in the next 2 passes
+    plan = BandwidthRules().decide(observe(many, t=0.0, soc=0.9 * SAT.battery_wh))
+    kept_raw = [i for i in range(60) if i not in plan.process]
+    assert 0 < len(kept_raw) < 60
+    assert sum(300.0 for _ in kept_raw) <= 0.8 * 11000.0 + 1e-6
+
+
+def test_value_aware_storage_guard_keeps_small_valuable_items():
+    # storage almost full of low-value raw images plus fresh telemetry: drop the images, keep telemetry
+    images = [mk(i, "optical_image", p=0.2, created=float(i)) for i in range(20)]
+    telemetry = [mk(100 + i, "telemetry", created=50.0) for i in range(30)]
+    tight = replace(SCN, satellite=replace(SAT, storage_mb=6100.0))
+    plan = ValueAwarePolicy().decide(observe(images + telemetry, t=100.0, scenario=tight))
+    assert plan.drop and all(i < 100 for i in plan.drop)
+
+
+def test_bandwidth_rules_cap_raw_holdings_to_half_the_storage():
+    from satsched.policies.baselines import BandwidthRules
+
+    small = replace(SCN, satellite=replace(SAT, storage_mb=3000.0))
+    many = [mk(i, "optical_image", p=0.8, created=float(i)) for i in range(9)]
+    plan = BandwidthRules().decide(observe(many, t=0.0, soc=0.9 * SAT.battery_wh, scenario=small))
+    kept = [i for i in range(9) if i not in plan.process]
+    assert len(kept) * 300.0 <= 1500.0
+
+
+def test_explanations_show_saturated_prices_in_words():
+    # storage filled mostly by data that cannot be shrunk: even processing both images cannot free enough
+    items = [mk(i, "telemetry", size=500.0, created=float(i)) for i in range(10)]
+    items += [mk(20 + i, "optical_image", p=0.6, created=float(i)) for i in range(2)]
+    tiny = replace(SCN, satellite=replace(SAT, storage_mb=5550.0))
+    plan = ValueAwarePolicy(ValueAwareConfig(explain=True)).decide(observe(items, t=100.0, scenario=tiny))
+    text = " ".join(e.reason for e in plan.explanations.values())
+    assert "e+" not in text and "saturated" in text

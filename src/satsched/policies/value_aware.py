@@ -25,9 +25,11 @@ from satsched.config import DataType, Processor
 from satsched.models import DataItem, Explanation, Observation, Plan, Route, Stage
 from satsched.policies.pricing import (
     BLOCKED,
+    arrival_value_density,
     NONE,
     PROCESS,
     RAW,
+    SATURATED_PRICE,
     OptionBook,
     choose,
     downlink_supply_mb,
@@ -72,7 +74,7 @@ class _Context:
     in_contact: bool
     committed_wh: float  # energy still needed by running jobs
     running_s: dict[Processor, float]
-    pipeline_mb: float  # storage held by items being processed
+    pipeline_shrink_mb: float  # storage that running jobs are expected to free
     reserve_mb: float  # free space kept for incoming data
     product_ready: dict[str, float]  # delivery time of a product if its processing starts now
 
@@ -116,7 +118,7 @@ def _context(obs: Observation, cfg: ValueAwareConfig) -> _Context:
         in_contact=sched.capacity_between(t, t + obs.dt_s) > 0,
         committed_wh=committed,
         running_s=running_s,
-        pipeline_mb=sum(i.size_mb for i in running),
+        pipeline_shrink_mb=sum(i.size_mb - expected_product_size(i, types[i.kind]) for i in running),
         reserve_mb=storage_reserve_mb(obs.scenario, cfg.storage_guard_s, cfg.min_reserve_frac),
         product_ready=ready,
     )
@@ -148,19 +150,20 @@ def _book(rows: list[_Row], ctx: _Context, worthless: np.ndarray) -> OptionBook:
     for k, r in enumerate(rows):
         uses[RAW, BW, k] = r.size_raw
         uses[RAW, ENERGY, k] = r.size_raw * tx_wh_per_mb
-        uses[RAW, STORAGE, k] = r.size_raw
+        # storage is priced by net change: keeping an item (RAW or NONE) adds nothing to what it already
+        # occupies, processing frees raw minus product size (a negative use)
         if r.ev_proc > BLOCKED:
             uses[PROCESS, BW, k] = r.size_proc
             uses[PROCESS, ENERGY, k] = r.energy_proc + r.size_proc * tx_wh_per_mb
             uses[PROCESS, GPU if r.kind.processor is Processor.GPU else CPU, k] = r.proc_s
-            uses[PROCESS, STORAGE, k] = r.size_proc
+            uses[PROCESS, STORAGE, k] = r.size_proc - r.size_raw
     wait_s = min(ctx.t_next - ctx.t, ctx.horizon_s) if math.isfinite(ctx.t_next) else ctx.horizon_s
     supply = np.array([
         downlink_supply_mb(ctx.obs.schedule, ctx.t, ctx.horizon_windows),
         energy_budget_wh(ctx.obs, ctx.horizon_s, ctx.committed_wh),
         sat.gpu_slots * ctx.horizon_s - ctx.running_s[Processor.GPU],
         sat.cpu_cores * ctx.horizon_s - ctx.running_s[Processor.CPU],
-        storage_supply_mb(ctx.obs, wait_s, ctx.reserve_mb, ctx.pipeline_mb) if ctx.cfg.price_storage else math.inf,
+        storage_supply_mb(ctx.obs, wait_s, ctx.reserve_mb, ctx.pipeline_shrink_mb) if ctx.cfg.price_storage else math.inf,
     ])
     return OptionBook(values=values, uses=uses, supply=supply)
 
@@ -243,11 +246,18 @@ def _drops(
     guard: list[int] = []
     if free >= reserve:
         return dropped_worthless, guard
+    # Only items worth less per MB than the data they make room for are worth dropping, cheapest first.
+    threshold = arrival_value_density(obs.scenario)
+
+    def density(k: int) -> float:
+        return max(rows[k].ev_raw, rows[k].ev_proc, 0.0) / max(rows[k].item.size_mb, 1e-6)
+
     candidates = [
         k for k, r in enumerate(rows)
-        if not worthless[k] and r.item.stage is Stage.RAW and r.item.sent_mb == 0 and r.item.id not in admitted
+        if not worthless[k] and r.item.stage in (Stage.RAW, Stage.PRODUCT) and r.item.sent_mb == 0
+        and r.item.id not in admitted and density(k) < threshold
     ]
-    candidates.sort(key=lambda k: (max(u[:, k].max(), 0.0) / max(rows[k].item.size_mb, 1e-6), rows[k].item.id))
+    candidates.sort(key=lambda k: (density(k), rows[k].item.id))
     for k in candidates:
         if free >= reserve:
             break
@@ -257,7 +267,13 @@ def _drops(
 
 
 def _fmt(x: float) -> str:
-    return "n/a" if x <= BLOCKED / 2 else f"{x:.2f}"
+    if x <= BLOCKED / 2:
+        return "n/a"
+    return "very high (frees scarce storage)" if x >= SATURATED_PRICE else f"{x:.2f}"
+
+
+def _fmt_price(x: float, unit: str, digits: int) -> str:
+    return "saturated" if x >= SATURATED_PRICE else f"{x:.{digits}f}/{unit}"
 
 
 def _explain(
@@ -265,8 +281,8 @@ def _explain(
     waiting: dict[int, str], worthless_ids: set[int], guard_ids: set[int],
 ) -> dict[int, Explanation]:
     price_txt = (
-        f"[downlink {prices[BW]:.4f}/MB, energy {prices[ENERGY]:.3f}/Wh, GPU {prices[GPU]:.4f}/s, "
-        f"storage {prices[STORAGE]:.4f}/MB]"
+        f"[downlink {_fmt_price(prices[BW], 'MB', 4)}, energy {_fmt_price(prices[ENERGY], 'Wh', 3)}, "
+        f"GPU {_fmt_price(prices[GPU], 's', 4)}, storage {_fmt_price(prices[STORAGE], 'MB', 4)}]"
     )
     out: dict[int, Explanation] = {}
     for k, r in enumerate(rows):

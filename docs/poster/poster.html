@@ -102,17 +102,17 @@
     <h1>Process or Transmit<span class="q">?</span></h1>
     <div class="subtitle">A value-aware onboard decision engine for resource-constrained satellites</div>
     <div class="claim">Every scarce resource gets a price; every data item picks its best net-value option.
-      On Sentinel-2A's real orbit: most science value in 4 of 5 scenarios (a tie in the 5th), with up to 35&nbsp;% less energy.</div>
+      On Sentinel-2A's real orbit: most science value in 5 of 6 scenarios against four baselines, with up to 22&nbsp;% less energy.</div>
     <div class="team"><b>Team name</b> · Affiliation · IASTAM 2026 · Problem 1</div>
   </div>
   <div class="qr">QR code<br>repo + live demo<br>(placeholder)</div>
 </header>
 
 <div class="tiles">
-  <div class="tile"><div class="num">20 / 20</div><div class="lbl">real days won against both baselines, in each of 4 scenarios (tie when storage is tightest)</div></div>
-  <div class="tile"><div class="num">+3–21 %</div><div class="lbl">more value than a hand-tuned rule-based operator (+6–59&nbsp;% vs process-all)</div></div>
-  <div class="tile"><div class="num">−22 %</div><div class="lbl">energy for processing + downlink, nominal mission (up to −35&nbsp;%)</div></div>
-  <div class="tile"><div class="num">35 % vs 4 %</div><div class="lbl">mean lowest battery when energy-starved: ours vs process-all</div></div>
+  <div class="tile"><div class="num">5 / 6</div><div class="lbl">scenarios where ours captures the most value, winning 18–20 of 20 real days in each</div></div>
+  <div class="tile"><div class="num">+2–20 %</div><div class="lbl">more value than the best of four baselines (up to +91&nbsp;% vs process-all)</div></div>
+  <div class="tile"><div class="num">−22 %</div><div class="lbl">energy for processing + downlink vs the rule set, nominal mission</div></div>
+  <div class="tile"><div class="num">28 % vs 10 %</div><div class="lbl">mean lowest battery when energy-starved: ours vs process-all (held at the load-shedding floor)</div></div>
 </div>
 
 <div class="main">
@@ -151,7 +151,7 @@
     </section>
     <div class="takeaways"><h3>Take-aways</h3><ul>
       <li>Prices turn five coupled constraints into one comparable number per option.</li>
-      <li>Biggest gain when the downlink is scarce: +20&nbsp;% value vs rules. When energy is scarce the battery stays at 35&nbsp;% vs 4&nbsp;% for process-all.</li>
+      <li>Biggest gain when the downlink is scarce: +20&nbsp;% value vs the best baseline. When memory is the bottleneck, simply processing everything is best.</li>
       <li>Every choice is logged with its utilities and prices, so operators can audit it.</li></ul></div>
   </div>
 
@@ -159,13 +159,14 @@
   <div class="col">
     <section>
       <h2><span class="n">3</span>How we evaluated</h2>
-      <p class="mid">Simulator of power, compute, storage and passes on 20 real days of Sentinel-2A's orbit. <b>5 scenarios × 4 strategies × 20 days = 400 simulated days.</b></p>
+      <p class="mid">Simulator of power, compute, storage and passes on 20 real days of Sentinel-2A's orbit. <b>6 scenarios × 5 strategies × 20 days = 600 simulated days.</b></p>
       <table>
-        <tr><th>Scenario</th><th>What binds</th></tr>
+        <tr><th>Scenario</th><th>Stress: 2/3 of what processing all needs</th></tr>
         <tr><td>Nominal</td><td>~90 vs ~21 GB/day</td></tr>
-        <tr><td>Energy-starved</td><td>46 W solar, 60 Wh battery</td></tr>
+        <tr><td>Energy-starved</td><td>44.8 W solar, 60 Wh battery</td></tr>
         <tr><td>Downlink-starved</td><td>20° mask, 40 Mbit/s</td></tr>
-        <tr><td>Storage-tight</td><td>8 GB mass memory</td></tr>
+        <tr><td>Storage-tight</td><td>2.85 GB mass memory</td></tr>
+        <tr><td>Compute-starved</td><td>4.7× slower accelerator</td></tr>
         <tr><td>Event surge</td><td>5× urgent events</td></tr>
       </table>
       <div class="legend">
@@ -173,15 +174,9 @@
         <span><i style="background:var(--rules)"></i>Priority rules</span>
         <span><i style="background:var(--procall)"></i>Process-all</span>
         <span><i style="background:var(--bent)"></i>Bent-pipe</span>
+        <span><i style="background:#e87ba4"></i>Bandwidth-aware rules</span>
       </div>
-      <table>
-        <tr><th>Criterion</th><th>Our metric</th></tr>
-        <tr><td>Decision quality</td><td>value captured (% of ideal)</td></tr>
-        <tr><td>Completed tasks</td><td>delivered + filtered onboard</td></tr>
-        <tr><td>Energy</td><td>Wh/day, min battery</td></tr>
-        <tr><td>Latency</td><td>mean, p95, alerts</td></tr>
-        <tr><td>Resource use</td><td>GPU, downlink, storage</td></tr>
-      </table>
+      <p class="small"><b>Metrics</b> for the 5 criteria: value captured · completed tasks · energy &amp; lowest battery · latency (alerts) · GPU, downlink, storage use.</p>
     </section>
     <section>
       <h2><span class="n">4</span>Explainable decisions</h2>
@@ -190,7 +185,7 @@
       <div class="log"><div class="what">Hyperspectral cube → <span class="route">TRANSMIT RAW</span></div>
         <code>U_raw 4.47 &gt;= U_proc 2.74 (spare downlink: raw keeps more science)</code></div>
       <div class="log"><div class="what">Optical image → <span class="route">DROP</span></div>
-        <code>storage guard, lowest value per MB onboard [storage 0.0029/MB]</code></div>
+        <code>storage guard, lowest value per MB onboard [storage saturated]</code></div>
       <p class="cap">Real log lines, seed 7 (nominal and storage-tight runs).</p>
     </section>
     <section>
@@ -198,7 +193,7 @@
       <div class="box"><h3>Limits</h3><ul>
         <li>Real orbit and passes; illustrative satellite resources and workload</li>
         <li>One ground station, simple power model</li>
-        <li>Completion rate 2–9 pts below the rules (see outcomes)</li></ul></div>
+        <li>When memory is the bottleneck, process-all wins (−1.5 pts)</li></ul></div>
       <div class="box"><h3>Next</h3><ul>
         <li>Flight compute costs on target hardware</li>
         <li>Hardware-in-the-loop tests</li>
@@ -211,13 +206,13 @@
     <section>
       <h2><span class="n">5</span>Results</h2>
       <figure><img src="../figures/value_by_scenario.png" alt="Value captured by scenario and strategy">
-        <figcaption>Most value in 4 of 5 scenarios, a tie when storage is tightest (mean of 20 real days, 95&nbsp;% CI).</figcaption></figure>
+        <figcaption>Most value in 5 of 6 scenarios; process-all is best when storage is tightest (mean of 20 real days, 95&nbsp;% CI).</figcaption></figure>
       <figure><img src="../figures/energy_by_scenario.png" alt="Energy by scenario and strategy">
-        <figcaption>2–35&nbsp;% less energy than the processing baselines.</figcaption></figure>
+        <figcaption>2–22&nbsp;% less energy than the rule set and process-all.</figcaption></figure>
       <figure><img src="../figures/timeline_energy_starved.png" alt="One energy-starved day">
-        <figcaption>Energy-starved day (real passes and eclipses of 3 Oct 2026): process-all empties the battery; ours keeps the largest margin and delivers the most value.</figcaption></figure>
+        <figcaption>Energy-starved day (real passes and eclipses of 3 Oct 2026): process-all is held at the load-shedding floor; ours keeps a margin and delivers the most value.</figcaption></figure>
       <figure><img src="../figures/outcomes.png" alt="Outcome of every data item">
-        <figcaption>Ours delivers the most items (65.0 vs 63.5&nbsp;% on average) with none expired; completion is lower (79 vs 85&nbsp;%) because it drops undeliverable items early and sends raw when bandwidth allows.</figcaption></figure>
+        <figcaption>Nominal: ours delivers the most items (65.0 vs 63.7&nbsp;% on average) with none expired; completion is lower (79 vs 85&nbsp;%) because it drops undeliverable items early and sends raw when bandwidth allows.</figcaption></figure>
     </section>
   </div>
 </div>

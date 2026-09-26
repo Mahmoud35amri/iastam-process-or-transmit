@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Callable
 
-from satsched.policies.baselines import BentPipe, PriorityRules, ProcessAll
+from satsched.policies.baselines import BandwidthRules, BentPipe, PriorityRules, ProcessAll
 from satsched.policies.value_aware import ValueAwareConfig, ValueAwarePolicy
 
 _FACTORIES: dict[str, Callable[[], object]] = {
     "bent_pipe": BentPipe,
     "process_all": ProcessAll,
     "priority_rules": PriorityRules,
+    "bandwidth_rules": BandwidthRules,
     "value_aware": ValueAwarePolicy,
 }
 POLICY_NAMES = tuple(_FACTORIES)

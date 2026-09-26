@@ -7,6 +7,7 @@ from satsched.models import Observation
 from satsched.orbit import ContactWindow, OrbitSchedule
 from satsched.policies.pricing import (
     NONE,
+    SATURATED_PRICE,
     PROCESS,
     RAW,
     OptionBook,
@@ -108,3 +109,38 @@ def test_inflow_rate_is_positive_and_scales_with_rates():
     doubled = replace(SCN, data_types=tuple(replace(k, rate_per_orbit=2 * k.rate_per_orbit) for k in SCN.data_types))
     assert base > 0
     assert inflow_rate_mb_s(doubled) == pytest.approx(2 * base)
+
+
+def test_storage_price_pushes_items_to_free_space_by_processing():
+    # two items: keeping raw is worth more, but processing frees 90 MB each; we must free 100 MB
+    b = book([10, 10], [[0, 0], [0, 0]], [8, 6], [[-90, 0], [-90, 0]], supply=[-100, 100])
+    prices = solve_prices(b)
+    choice, _ = choose(b, prices)
+    assert list(choice) == [PROCESS, PROCESS]
+    assert usage(b, choice)[0] <= -100
+
+
+def test_storage_price_frees_only_what_is_needed():
+    b = book([10, 10], [[0, 0], [0, 0]], [9, 5], [[-90, 0], [-90, 0]], supply=[-50, 100])
+    choice, _ = choose(b, solve_prices(b))
+    assert list(choice) == [PROCESS, RAW]  # the cheaper item to convert is processed first
+
+
+def test_storage_supply_counts_free_space_left_for_arrivals():
+    from satsched.policies.pricing import storage_supply_mb
+
+    o = Observation(0.0, 30.0, 60.0, 1000.0, (), SCN, SCHED)
+    free = SCN.satellite.storage_mb - 1000.0
+    assert storage_supply_mb(o, 0.0, 500.0, 0.0) == pytest.approx(free - 500.0)
+    assert storage_supply_mb(o, 0.0, 500.0, 200.0) == pytest.approx(free - 500.0 + 200.0)
+    assert storage_supply_mb(o, 3600.0, 0.0, 0.0) < free
+
+
+
+def test_saturated_price_makes_every_item_that_can_free_space_do_so():
+    # we need to free 1000 MB but processing both items frees only 180: both must be processed
+    b = book([10, 10], [[0, 0], [0, 0]], [8, 6], [[-90, 0], [-90, 0]], supply=[-1000, 100])
+    prices = solve_prices(b)
+    choice, _ = choose(b, prices)
+    assert list(choice) == [PROCESS, PROCESS]
+    assert prices[0] >= SATURATED_PRICE
