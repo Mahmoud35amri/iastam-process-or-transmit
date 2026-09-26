@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Process or Transmit? — IASTAM 2026 poster</title>
+<style>
+  @page { size: 594mm 841mm; margin: 0; }
+  :root {
+    --ink: #0b0b0b; --ink-2: #52514e; --surface: #fcfcfb; --line: #e4e3de;
+    --ours: #2a78d6; --rules: #eb6834; --procall: #1baf7a; --bent: #eda100;
+    --ours-soft: #eef4fc; --ours-deep: #1c5cab; --card: #f4f3ef;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 594mm; height: 841mm; background: var(--surface); color: var(--ink); }
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 28pt; line-height: 1.25;
+    padding: 16mm 17mm 12mm;
+    display: flex; flex-direction: column; gap: 7mm;
+    overflow: hidden;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  /* ---------- header ---------- */
+  header { display: grid; grid-template-columns: 1fr 62mm; gap: 10mm; align-items: center;
+           border-bottom: 1.2mm solid var(--ours); padding-bottom: 6mm; }
+  h1 { font-size: 104pt; line-height: 1.0; letter-spacing: -1.5pt; font-weight: 800; }
+  h1 .q { color: var(--ours); }
+  .subtitle { font-size: 40pt; font-weight: 600; color: var(--ink); margin-top: 3mm; }
+  .claim { font-size: 30pt; color: var(--ink-2); margin-top: 2.5mm; }
+  .team { font-size: 26pt; color: var(--ink-2); margin-top: 3mm; }
+  .team b { color: var(--ink); }
+  .qr { width: 62mm; height: 62mm; border: 0.8mm dashed var(--ink-2); border-radius: 3mm;
+        display: flex; align-items: center; justify-content: center; text-align: center;
+        font-size: 20pt; color: var(--ink-2); padding: 4mm; }
+  /* ---------- hero numbers ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6mm; }
+  .tile { background: var(--ours-soft); border-radius: 4mm; padding: 4mm 5mm 4.5mm; border-top: 1.4mm solid var(--ours); }
+  .tile .num { font-size: 60pt; font-weight: 800; color: var(--ours-deep); line-height: 1.05; white-space: nowrap; }
+  .tile .lbl { font-size: 21pt; color: var(--ink-2); line-height: 1.2; margin-top: 1.5mm; }
+  /* ---------- sections ---------- */
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; }
+  section { display: flex; flex-direction: column; gap: 3mm; }
+  h2 { font-size: 40pt; font-weight: 800; display: flex; align-items: center; gap: 4mm; line-height: 1.1; }
+  h2 .n { display: inline-flex; width: 15mm; height: 15mm; border-radius: 50%; background: var(--ours);
+          color: white; font-size: 28pt; align-items: center; justify-content: center; flex: none; }
+  p, li { font-size: 28pt; }
+  ul { padding-left: 9mm; }
+  li { margin: 1mm 0; }
+  .muted { color: var(--ink-2); }
+  .small { font-size: 22pt; line-height: 1.25; }
+  figure { display: flex; flex-direction: column; gap: 1.5mm; }
+  figure img { width: 100%; display: block; border-radius: 2mm; }
+  figcaption { font-size: 21pt; color: var(--ink-2); line-height: 1.25; }
+  .formula { background: var(--ink); color: white; border-radius: 3mm; padding: 4mm 6mm; text-align: center;
+             font-size: 36pt; font-family: "Cambria Math", "Times New Roman", serif; }
+  .formula .sub { font-size: 20pt; font-family: "Segoe UI", Arial, sans-serif; color: #c3c2b7; display: block; margin-top: 1mm; }
+  ol.steps { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 1.8mm; }
+  ol.steps li { font-size: 27pt; line-height: 1.22; padding-left: 12mm; position: relative; }
+  ol.steps li::before { content: attr(data-n); position: absolute; left: 0; top: 0.3mm; width: 8.5mm; height: 8.5mm;
+                        border-radius: 50%; background: var(--ours-soft); color: var(--ours-deep); font-weight: 800;
+                        font-size: 19pt; display: flex; align-items: center; justify-content: center; }
+  .log { background: var(--card); border-left: 1.2mm solid var(--ours); border-radius: 2mm; padding: 2.5mm 4mm; }
+  .log .what { font-size: 25pt; font-weight: 700; }
+  .log .what .route { color: var(--ours-deep); }
+  .log code { font-family: Consolas, "Courier New", monospace; font-size: 20.5pt; color: var(--ink-2); display: block; margin-top: 0.8mm; }
+  table { border-collapse: collapse; width: 100%; font-size: 23pt; line-height: 1.2; }
+  th { text-align: left; color: var(--ink-2); font-weight: 600; border-bottom: 0.5mm solid var(--ink-2); padding: 1.2mm 2mm; }
+  td { border-bottom: 0.3mm solid var(--line); padding: 1.2mm 2mm; vertical-align: top; }
+  .legend { display: flex; flex-wrap: wrap; gap: 2mm 6mm; font-size: 22pt; }
+  .legend span { display: inline-flex; align-items: center; gap: 2mm; }
+  .legend i { width: 7mm; height: 7mm; border-radius: 1.2mm; display: inline-block; }
+  .results-top { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
+  .two-col-list { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .box { background: var(--card); border-radius: 3mm; padding: 3mm 4.5mm; }
+  .box h3 { font-size: 26pt; margin-bottom: 1mm; }
+  .box li { font-size: 25pt; margin: 0.6mm 0; }
+  .takeaways { background: var(--ours-soft); border-radius: 3mm; padding: 4mm 5mm; border-left: 1.4mm solid var(--ours); }
+  .takeaways h3 { font-size: 30pt; margin-bottom: 1.5mm; color: var(--ours-deep); }
+  .takeaways li { font-size: 25pt; margin: 1mm 0; }
+  .main { display: grid; grid-template-columns: 176mm 168mm 200mm; gap: 8mm; flex: 1; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 6mm; min-height: 0; }
+  .mid, ul.mid li { font-size: 27pt; line-height: 1.22; }
+  .cap { font-size: 20pt; color: var(--ink-2); }
+  .flow { display: flex; align-items: stretch; gap: 2.5mm; }
+  .fbox { flex: 1 1 0; background: var(--card); border-radius: 3mm; padding: 3mm 2mm; font-size: 25pt; font-weight: 700;
+          line-height: 1.15; text-align: center; display: flex; flex-direction: column; justify-content: center; gap: 1mm; }
+  .fbox span { font-size: 19pt; font-weight: 400; color: var(--ink-2); }
+  .fbox.engine { background: var(--ours-soft); border: 0.8mm solid var(--ours); color: var(--ours-deep); }
+  .farrow { font-size: 40pt; align-self: center; color: var(--ink-2); }
+  .fouts { flex: 1.1 1 0; display: grid; gap: 1.2mm; }
+  .fouts span { background: var(--surface); border: 0.5mm solid var(--line); border-radius: 2mm; padding: 1mm 2mm;
+                font-size: 21pt; font-weight: 600; text-align: center; }
+  .finputs { font-size: 21pt; color: var(--ink-2); text-align: center; margin-top: -1mm; }
+  footer { margin-top: auto; font-size: 19pt; color: var(--ink-2); display: flex; justify-content: space-between;
+           border-top: 0.4mm solid var(--line); padding-top: 2.5mm; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Process or Transmit<span class="q">?</span></h1>
+    <div class="subtitle">A value-aware onboard decision engine for resource-constrained satellites</div>
+    <div class="claim">Every scarce resource gets a price; every data item picks its best net-value option.
+      On Sentinel-2A's real orbit: most science value in 4 of 5 scenarios (a tie in the 5th), with up to 35&nbsp;% less energy.</div>
+    <div class="team"><b>Team name</b> · Affiliation · IASTAM 2026 · Problem 1</div>
+  </div>
+  <div class="qr">QR code<br>repo + live demo<br>(placeholder)</div>
+</header>
+
+<div class="tiles">
+  <div class="tile"><div class="num">20 / 20</div><div class="lbl">real days won against both baselines, in each of 4 scenarios (tie when storage is tightest)</div></div>
+  <div class="tile"><div class="num">+3–21 %</div><div class="lbl">more value than a hand-tuned rule-based operator (+6–59&nbsp;% vs process-all)</div></div>
+  <div class="tile"><div class="num">−22 %</div><div class="lbl">energy for processing + downlink, nominal mission (up to −35&nbsp;%)</div></div>
+  <div class="tile"><div class="num">35 % vs 4 %</div><div class="lbl">mean lowest battery when energy-starved: ours vs process-all</div></div>
+</div>
+
+<div class="main">
+  <!-- COLUMN 1: problem + idea -->
+  <div class="col">
+    <section>
+      <h2><span class="n">1</span>The problem</h2>
+      <p>A small Earth-observation satellite generates <b>~90&nbsp;GB/day</b> but can downlink only <b>~21&nbsp;GB/day</b>.
+        For every item: <b>process now</b>, <b>store</b>, <b>transmit</b>, or drop?</p>
+      <ul class="mid">
+        <li>Real orbit: Sentinel-2A TLE (786&nbsp;km SSO), propagated with SGP4 (skyfield)</li>
+        <li>Battery charges only in sunlight: 34-min eclipse every 101-min orbit</li>
+        <li>1 GPU + 4 CPU cores, 8&nbsp;GB RAM, 32&nbsp;GB storage</li>
+        <li>~4.4 real passes/day over Toulouse, up to 10&nbsp;min, 80&nbsp;Mbit/s</li>
+        <li>Value decays with latency: an alert loses half its value per hour</li>
+      </ul>
+    </section>
+    <section>
+      <h2><span class="n">2</span>Our idea</h2>
+      <div class="flow" role="img" aria-label="Instruments feed the decision engine, which routes every item to process now, store, transmit or drop">
+        <div class="fbox">Instruments<span>~90 GB / day</span></div>
+        <div class="farrow">→</div>
+        <div class="fbox engine">Decision engine<span>every 30 s</span></div>
+        <div class="farrow">→</div>
+        <div class="fouts"><span>Process now</span><span>Store</span><span>Transmit</span><span>Drop</span></div>
+      </div>
+      <p class="finputs">Forecasts in: passes · eclipses · battery · queues</p>
+      <div class="formula">U = EV − Σ<sub>r</sub> λ<sub>r</sub> · use<sub>r</sub>
+        <span class="sub">net utility = expected value − price of every resource used</span></div>
+      <ol class="steps">
+        <li data-n="1"><b>Value</b> each option (raw vs processed): priority × P(useful) × timeliness.</li>
+        <li data-n="2"><b>Price</b> downlink, energy, GPU, CPU, storage: prices rise until the plan fits forecast passes, sunlight and disk.</li>
+        <li data-n="3"><b>Choose</b> the best option per item: PROCESS / RAW / NONE.</li>
+        <li data-n="4"><b>Act</b>: start jobs, order the downlink, guard storage. Re-planned every 30&nbsp;s.</li>
+      </ol>
+    </section>
+    <div class="takeaways"><h3>Take-aways</h3><ul>
+      <li>Prices turn five coupled constraints into one comparable number per option.</li>
+      <li>Biggest gain when the downlink is scarce: +20&nbsp;% value vs rules. When energy is scarce the battery stays at 35&nbsp;% vs 4&nbsp;% for process-all.</li>
+      <li>Every choice is logged with its utilities and prices, so operators can audit it.</li></ul></div>
+  </div>
+
+  <!-- COLUMN 2: evaluation + explainability + limits -->
+  <div class="col">
+    <section>
+      <h2><span class="n">3</span>How we evaluated</h2>
+      <p class="mid">Simulator of power, compute, storage and passes on 20 real days of Sentinel-2A's orbit. <b>5 scenarios × 4 strategies × 20 days = 400 simulated days.</b></p>
+      <table>
+        <tr><th>Scenario</th><th>What binds</th></tr>
+        <tr><td>Nominal</td><td>~90 vs ~21 GB/day</td></tr>
+        <tr><td>Energy-starved</td><td>46 W solar, 60 Wh battery</td></tr>
+        <tr><td>Downlink-starved</td><td>20° mask, 40 Mbit/s</td></tr>
+        <tr><td>Storage-tight</td><td>8 GB mass memory</td></tr>
+        <tr><td>Event surge</td><td>5× urgent events</td></tr>
+      </table>
+      <div class="legend">
+        <span><i style="background:var(--ours)"></i>Value-aware (ours)</span>
+        <span><i style="background:var(--rules)"></i>Priority rules</span>
+        <span><i style="background:var(--procall)"></i>Process-all</span>
+        <span><i style="background:var(--bent)"></i>Bent-pipe</span>
+      </div>
+      <table>
+        <tr><th>Criterion</th><th>Our metric</th></tr>
+        <tr><td>Decision quality</td><td>value captured (% of ideal)</td></tr>
+        <tr><td>Completed tasks</td><td>delivered + filtered onboard</td></tr>
+        <tr><td>Energy</td><td>Wh/day, min battery</td></tr>
+        <tr><td>Latency</td><td>mean, p95, alerts</td></tr>
+        <tr><td>Resource use</td><td>GPU, downlink, storage</td></tr>
+      </table>
+    </section>
+    <section>
+      <h2><span class="n">4</span>Explainable decisions</h2>
+      <div class="log"><div class="what">Event candidate → <span class="route">PROCESS NOW</span></div>
+        <code>U_proc 10.66 &gt; U_raw 7.54; ~1 MB product vs 33 MB raw</code></div>
+      <div class="log"><div class="what">Hyperspectral cube → <span class="route">TRANSMIT RAW</span></div>
+        <code>U_raw 4.47 &gt;= U_proc 2.74 (spare downlink: raw keeps more science)</code></div>
+      <div class="log"><div class="what">Optical image → <span class="route">DROP</span></div>
+        <code>storage guard, lowest value per MB onboard [storage 0.0029/MB]</code></div>
+      <p class="cap">Real log lines, seed 7 (nominal and storage-tight runs).</p>
+    </section>
+    <section>
+      <h2><span class="n">6</span>Limits &amp; next steps</h2>
+      <div class="box"><h3>Limits</h3><ul>
+        <li>Real orbit and passes; illustrative satellite resources and workload</li>
+        <li>One ground station, simple power model</li>
+        <li>Completion rate 2–9 pts below the rules (see outcomes)</li></ul></div>
+      <div class="box"><h3>Next</h3><ul>
+        <li>Flight compute costs on target hardware</li>
+        <li>Hardware-in-the-loop tests</li>
+        <li>Learned usefulness, real mission data</li></ul></div>
+    </section>
+  </div>
+
+  <!-- COLUMN 3: results -->
+  <div class="col">
+    <section>
+      <h2><span class="n">5</span>Results</h2>
+      <figure><img src="../figures/value_by_scenario.png" alt="Value captured by scenario and strategy">
+        <figcaption>Most value in 4 of 5 scenarios, a tie when storage is tightest (mean of 20 real days, 95&nbsp;% CI).</figcaption></figure>
+      <figure><img src="../figures/energy_by_scenario.png" alt="Energy by scenario and strategy">
+        <figcaption>2–35&nbsp;% less energy than the processing baselines.</figcaption></figure>
+      <figure><img src="../figures/timeline_energy_starved.png" alt="One energy-starved day">
+        <figcaption>Energy-starved day (real passes and eclipses of 3 Oct 2026): process-all empties the battery; ours keeps the largest margin and delivers the most value.</figcaption></figure>
+      <figure><img src="../figures/outcomes.png" alt="Outcome of every data item">
+        <figcaption>Ours delivers the most items (65.0 vs 63.5&nbsp;% on average) with none expired; completion is lower (79 vs 85&nbsp;%) because it drops undeliverable items early and sends raw when bandwidth allows.</figcaption></figure>
+    </section>
+  </div>
+</div>
+
+<footer>
+  <span>Open code, dataset, simulator and dashboard: repository link (QR, top right)</span>
+  <span>All numbers: mean of 20 real days · results/summary.csv</span>
+</footer>
+
+</body>
+</html>

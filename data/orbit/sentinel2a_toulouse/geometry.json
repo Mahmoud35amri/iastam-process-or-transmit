@@ -1,0 +1,27 @@
+{
+  "satellite": "SENTINEL-2A",
+  "norad_id": 40697,
+  "tle": [
+    "SENTINEL-2A",
+    "1 40697U 15028A   26269.26361394  .00000122  00000+0  63194-4 0  9992",
+    "2 40697  98.5668 342.6431 0001084  87.4341 272.6966 14.30817896588188"
+  ],
+  "tle_epoch_utc": "2026-09-26T06:19:36.244446+00:00",
+  "start_utc": "2026-09-26T00:00:00+00:00",
+  "days": 62,
+  "station": {
+    "name": "CNES Toulouse, France (approx.)",
+    "lat_deg": 43.56,
+    "lon_deg": 1.48,
+    "elevation_m": 150.0
+  },
+  "masks": [
+    10.0,
+    20.0
+  ],
+  "period_s": 6038.5,
+  "sample_step_s": 10.0,
+  "ephemeris": "de421.bsp",
+  "generator": "skyfield 1.55 (SGP4 propagation, find_events, is_sunlit)",
+  "generated_utc": "2026-09-26T15:32:37+00:00"
+}

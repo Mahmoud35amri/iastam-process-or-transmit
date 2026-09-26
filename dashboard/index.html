@@ -1,0 +1,560 @@
+<title>Onboard Triage Console</title>
+<meta name="description" content="Process-or-transmit decision engine for satellites: benchmark results and a replay of one simulated day.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground: #f6f7f5;
+    --panel: #ffffff;
+    --ink: #14181d;
+    --ink-2: #58606a;
+    --ink-3: #8a929b;
+    --line: #e2e5e1;
+    --line-strong: #cfd4ce;
+    --eclipse: #eceeea;
+    --pass: #d6e6fb;
+    --focus: #2a78d6;
+    --s-value_aware: #2a78d6;
+    --s-priority_rules: #eb6834;
+    --s-process_all: #1baf7a;
+    --s-bent_pipe: #eda100;
+    --chip-process: #dcebfc;
+    --chip-transmit: #e3f4ec;
+    --chip-drop: #eeeae4;
+    --chip-discard: #f1eefb;
+    --good: #0f7b4f;
+    --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-head: "IBM Plex Sans Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #0e1115;
+      --panel: #161a1f;
+      --ink: #eef1f4;
+      --ink-2: #a9b1ba;
+      --ink-3: #78818b;
+      --line: #252b32;
+      --line-strong: #323942;
+      --eclipse: #1c2127;
+      --pass: #17304d;
+      --focus: #3987e5;
+      --s-value_aware: #3987e5;
+      --s-priority_rules: #d95926;
+      --s-process_all: #199e70;
+      --s-bent_pipe: #c98500;
+      --chip-process: #16304f;
+      --chip-transmit: #143328;
+      --chip-drop: #2a2824;
+      --chip-discard: #2a2540;
+      --good: #4cc38a;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0e1115;
+    --panel: #161a1f;
+    --ink: #eef1f4;
+    --ink-2: #a9b1ba;
+    --ink-3: #78818b;
+    --line: #252b32;
+    --line-strong: #323942;
+    --eclipse: #1c2127;
+    --pass: #17304d;
+    --focus: #3987e5;
+    --s-value_aware: #3987e5;
+    --s-priority_rules: #d95926;
+    --s-process_all: #199e70;
+    --s-bent_pipe: #c98500;
+    --chip-process: #16304f;
+    --chip-transmit: #143328;
+    --chip-drop: #2a2824;
+    --chip-discard: #2a2540;
+    --good: #4cc38a;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font: 15px/1.5 var(--font-body);
+    padding-inline: 16px;
+    padding-block: 20px 48px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+  h1, h2, h3 { font-family: var(--font-head); margin: 0; text-wrap: balance; letter-spacing: 0.005em; }
+  h1 { font-size: clamp(28px, 4.2vw, 40px); font-weight: 700; line-height: 1.1; }
+  h2 { font-size: 22px; font-weight: 600; }
+  h3 { font-size: 16px; font-weight: 600; }
+  p { margin: 0; }
+  .eyebrow { font: 500 12px/1.2 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+  .muted { color: var(--ink-2); }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  header.top { display: grid; gap: 10px; padding-block: 8px 4px; }
+  header.top .lede { max-width: 70ch; color: var(--ink-2); }
+  .spec { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 13px/1.4 var(--font-mono); color: var(--ink-2); }
+  .spec b { color: var(--ink); font-weight: 500; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+  .panel-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chipbtn {
+    font: 500 13px/1 var(--font-body); color: var(--ink-2); background: transparent;
+    border: 1px solid var(--line-strong); border-radius: 999px; padding: 7px 12px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { color: var(--panel); background: var(--ink); border-color: var(--ink); }
+  .chipbtn { display: inline-flex; align-items: center; gap: 7px; }
+  .chipbtn .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .chipbtn[aria-pressed="false"] { opacity: 0.5; }
+  .chipbtn[aria-pressed="false"] .sw { background: transparent !important; outline: 1.5px solid var(--ink-3); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  select { font: 14px var(--font-body); color: var(--ink); background: var(--panel); border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px 8px; }
+
+  .bench { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px; }
+  @media (max-width: 820px) { .bench { grid-template-columns: 1fr; } }
+  .hbar-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; align-items: center; min-height: 34px; }
+  .hbar-row .name { font-size: 14px; }
+  .hbar-track { position: relative; height: 22px; }
+  .hbar { position: absolute; left: 0; top: 3px; height: 16px; border-radius: 0 4px 4px 0; }
+  .whisker { position: absolute; top: 7px; height: 8px; border-left: 1.5px solid var(--ink-2); border-right: 1.5px solid var(--ink-2); }
+  .whisker::after { content: ""; position: absolute; left: 0; right: 0; top: 3px; border-top: 1.5px solid var(--ink-2); }
+  .hbar-val { position: absolute; top: 1px; font: 12.5px/20px var(--font-mono); color: var(--ink); white-space: nowrap; }
+  .verdict { border-left: 3px solid var(--s-value_aware); padding: 4px 0 4px 12px; font-size: 14px; color: var(--ink-2); }
+  .verdict b { color: var(--ink); }
+  .note { font-size: 13px; color: var(--ink-2); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font: 500 11.5px/1.3 var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-2); }
+  td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .scroll-x { overflow-x: auto; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 7px; vertical-align: 0; }
+
+  .replay-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .clock { font: 500 22px/1 var(--font-mono); font-variant-numeric: tabular-nums; min-width: 8ch; }
+  .play { font: 600 13px/1 var(--font-body); border: 1px solid var(--ink); background: var(--ink); color: var(--panel); border-radius: 6px; padding: 8px 14px; cursor: pointer; }
+  input[type="range"] { flex: 1 1 260px; accent-color: var(--s-value_aware); min-width: 0; }
+  .status { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill { font: 500 12px/1 var(--font-mono); padding: 5px 9px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink-2); }
+  .pill.on { border-color: transparent; background: var(--pass); color: var(--ink); }
+  .pill.dark { border-color: transparent; background: var(--eclipse); color: var(--ink); }
+
+  .charts { display: grid; gap: 4px; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart .ylab { font: 11px var(--font-mono); fill: var(--ink-2); }
+  .chart .title { font: 600 12.5px var(--font-body); fill: var(--ink); }
+  .tip {
+    position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line-strong);
+    border-radius: 6px; padding: 6px 8px; font: 12px/1.45 var(--font-mono); color: var(--ink);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); white-space: nowrap; z-index: 2;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  .split { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+  .log { display: grid; gap: 0; max-height: 440px; overflow-y: auto; border-top: 1px solid var(--line); }
+  .log-item { display: grid; grid-template-columns: 64px 112px minmax(0, 1fr); gap: 4px 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .log-item .t { font-family: var(--font-mono); color: var(--ink-2); font-size: 12.5px; }
+  .chip { font: 500 11px/1 var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; padding: 5px 7px; border-radius: 4px; justify-self: start; align-self: start; }
+  .chip.process_start { background: var(--chip-process); }
+  .chip.delivered { background: var(--chip-transmit); }
+  .chip.dropped, .chip.expired, .chip.overflow { background: var(--chip-drop); }
+  .chip.discarded { background: var(--chip-discard); }
+  .why { color: var(--ink); }
+  .why .prices { display: block; color: var(--ink-3); font: 11.5px/1.4 var(--font-mono); margin-top: 2px; white-space: normal; overflow-wrap: anywhere; }
+  .empty { padding: 16px 2px; color: var(--ink-2); font-size: 14px; }
+
+  .stack { display: flex; height: 26px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--panel); }
+  .stack div { display: flex; align-items: center; justify-content: center; font: 500 11.5px var(--font-mono); color: var(--ink); min-width: 0; overflow: hidden; }
+  .stack-row { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px; align-items: center; }
+
+  .formula { font: 14px/1.6 var(--font-mono); background: var(--ground); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+  .steps div { display: grid; gap: 4px; align-content: start; }
+  .steps .k { font: 500 12px var(--font-mono); color: var(--s-value_aware); }
+  footer { font-size: 12.5px; color: var(--ink-2); display: grid; gap: 4px; }
+  @media (max-width: 520px) {
+    .hbar-row, .stack-row { grid-template-columns: 1fr; gap: 2px; }
+    .log-item { grid-template-columns: 56px minmax(0, 1fr); }
+    .log-item .why { grid-column: 1 / -1; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">IASTAM · Problem 1 · Process or transmit?</p>
+    <h1>Onboard Triage Console</h1>
+    <p class="lede">A satellite flying Sentinel-2A's real orbit acquires far more data than it can send down to Toulouse. Every 30 seconds the value-aware engine decides, for each item onboard, whether to <b>process it now</b>, <b>store it</b>, <b>transmit it</b> or <b>drop it</b>, by pricing downlink, energy, GPU, CPU and storage and choosing the option with the best net value.</p>
+    <div class="spec" id="spec"></div>
+  </header>
+
+  <section class="panel" aria-labelledby="bench-h">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Benchmark · 20 simulated days per cell</p>
+        <h2 id="bench-h">How each strategy scores</h2>
+      </div>
+      <div class="seg" id="scenario-seg" role="group" aria-label="Scenario"></div>
+    </div>
+    <div class="bench">
+      <div style="display:grid;gap:10px;min-width:0">
+        <div class="seg" id="metric-seg" role="group" aria-label="Metric"></div>
+        <div id="hbars"></div>
+        <p class="note" id="metric-note"></p>
+      </div>
+      <div style="display:grid;gap:12px;align-content:start;min-width:0">
+        <p class="verdict" id="verdict"></p>
+        <p class="note" id="scenario-desc"></p>
+        <div class="scroll-x"><table id="bench-table"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="replay-h">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow" id="replay-eyebrow">Replay</p>
+        <h2 id="replay-h">One simulated day, step by step</h2>
+      </div>
+      <div class="seg" id="policy-toggles" role="group" aria-label="Strategies shown"></div>
+    </div>
+    <div class="replay-controls">
+      <button class="play" id="play" type="button">Play</button>
+      <span class="clock" id="clock">T+00:00</span>
+      <input type="range" id="scrub" min="0" max="1440" step="2" value="0" aria-label="Mission time">
+      <div class="status" id="status"></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--eclipse)"></i>Eclipse (no solar power)</span>
+      <span><i style="background:var(--pass)"></i>Ground-station pass (downlink open)</span>
+      <span><i style="border-top:2px dashed var(--ink-2);height:0;width:16px"></i>Battery reserve</span>
+    </div>
+    <div class="charts" id="charts"></div>
+    <div class="scroll-x"><table id="cursor-table"></table></div>
+  </section>
+
+  <section class="split">
+    <div class="panel" aria-labelledby="log-h">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Value-aware engine · decision log</p>
+          <h2 id="log-h">Why it did what it did</h2>
+        </div>
+        <div class="seg" id="action-seg" role="group" aria-label="Decision type"></div>
+      </div>
+      <p class="note" id="log-note"></p>
+      <div class="log" id="log"></div>
+    </div>
+    <div class="panel" aria-labelledby="outcome-h">
+      <div>
+        <p class="eyebrow">Replay day · every generated item</p>
+        <h2 id="outcome-h">Where the data went</h2>
+      </div>
+      <div id="stacks" style="display:grid;gap:10px"></div>
+      <div class="legend" id="stack-legend"></div>
+      <label class="note" for="type-policy">Per data type for
+        <select id="type-policy"></select>
+      </label>
+      <div class="scroll-x"><table id="type-table"></table></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="how-h">
+    <div>
+      <p class="eyebrow">Method</p>
+      <h2 id="how-h">How the engine decides</h2>
+    </div>
+    <div class="formula">U(item, option) = E[value delivered] − λ<sub>downlink</sub>·MB − λ<sub>energy</sub>·Wh − λ<sub>GPU</sub>·s − λ<sub>CPU</sub>·s − λ<sub>storage</sub>·MB<br>option ∈ {process then send, send raw, keep}; λ raised until each resource's planned use fits its forecast supply</div>
+    <div class="steps">
+      <div><span class="k">value</span><h3>Estimate what each option is worth</h3><p class="muted">Priority × probability the content is useful × decay with latency. Raw data waits for ground processing; a product keeps only part of the value but is far smaller.</p></div>
+      <div><span class="k">price</span><h3>Price the scarce resources</h3><p class="muted">Forecasts of passes, eclipses and battery give each resource a supply. Prices rise until demand fits: zero when a resource is plentiful, high when it binds.</p></div>
+      <div><span class="k">choose</span><h3>Pick the best net option</h3><p class="muted">Process now if a GPU/CPU slot, RAM and the battery reserve allow; otherwise store for later. Send in order of value per MB plus urgency.</p></div>
+      <div><span class="k">guard</span><h3>Protect the spacecraft</h3><p class="muted">Keep free storage for incoming data and energy for the next eclipse and pass. Items that cannot reach the ground before their deadline are dropped.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p id="foot-geo"></p>
+    <p id="foot-data"></p>
+  </footer>
+</div>
+
+<script src="data.js"></script>
+<script>
+(function () {
+  "use strict";
+  const D = window.SATSCHED_DATA;
+  if (!D) {
+    document.querySelector(".wrap").insertAdjacentHTML("beforeend",
+      '<p class="panel">Data file <code>data.js</code> is missing. Generate it with <code>python -m satsched.cli demo</code>.</p>');
+    return;
+  }
+  const POLICIES = ["value_aware", "priority_rules", "process_all", "bent_pipe"];
+  const LABEL = { value_aware: "Value-aware (ours)", priority_rules: "Priority rules", process_all: "Process-all", bent_pipe: "Bent-pipe" };
+  const SHORT = { value_aware: "Value-aware", priority_rules: "Priority rules", process_all: "Process-all", bent_pipe: "Bent-pipe" };
+  const SCEN = { nominal: "Nominal", energy_starved: "Energy-starved", downlink_starved: "Downlink-starved", storage_tight: "Storage-tight", event_surge: "Event surge" };
+  const METRICS = [
+    { key: "value_score_pct", label: "Value captured", unit: "% of ideal", better: "higher", fmt: 1 },
+    { key: "energy_total_wh", label: "Energy used", unit: "Wh / day", better: "lower", fmt: 0 },
+    { key: "completion_rate_pct", label: "Completed items", unit: "%", better: "higher", fmt: 1 },
+    { key: "alert_latency_mean_min", label: "Alert latency", unit: "min", better: "lower", fmt: 0 },
+    { key: "min_soc_pct", label: "Lowest battery", unit: "%", better: "higher", fmt: 0 },
+    { key: "downlink_util_pct", label: "Downlink used", unit: "% of pass capacity", better: "higher", fmt: 0 },
+  ];
+  const color = (p) => `var(--s-${p})`;
+  const sat = D.scenario.satellite;
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const tplus = (min) => { const m = Math.max(0, Math.round(min)); return `T+${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
+  const fmt = (v, d) => (v === null || v === undefined || Number.isNaN(+v)) ? "—" : (+v).toFixed(d);
+
+  const state = { scenario: "nominal", metric: "value_score_pct", shown: new Set(["value_aware", "priority_rules", "process_all"]), cursor: 360, playing: false, actions: "all", typePolicy: "value_aware" };
+  try { const saved = JSON.parse(localStorage.getItem("triage-console") || "{}"); if (saved.scenario && SCEN[saved.scenario]) state.scenario = saved.scenario; if (saved.metric) state.metric = saved.metric; } catch (e) { /* storage unavailable */ }
+  const remember = () => { try { localStorage.setItem("triage-console", JSON.stringify({ scenario: state.scenario, metric: state.metric })); } catch (e) { /* ignore */ } };
+
+  // ---------- header spec ----------
+  const orbit = D.scenario.orbit;
+  const geo = D.geometry || { source: "synthetic" };
+  const passesToday = D.windows.filter((w) => w[0] < 1440).length;
+  const orbitMin = (geo.period_s || orbit.period_s) / 60;
+  const specs = [
+    ["battery", `${sat.battery_wh} Wh`], ["solar", `${sat.solar_w} W`], ["storage", `${(sat.storage_mb / 1000).toFixed(0)} GB`],
+    ["GPU", `${sat.gpu_slots} × ${sat.gpu_w} W`], ["CPU", `${sat.cpu_cores} cores`], ["downlink", `${orbit.downlink_mb_s} MB/s`],
+    ["passes on replay day", String(passesToday)], ["orbit", `${orbitMin.toFixed(1)} min`],
+  ];
+  if (geo.source === "real") specs.push(["geometry", `${geo.satellite} TLE · ${geo.station.name.split(",")[0]}`]);
+  document.getElementById("spec").innerHTML = specs.map(([k, v]) => `<span>${esc(k)} <b>${esc(v)}</b></span>`).join("");
+  const footGeo = document.getElementById("foot-geo");
+  footGeo.textContent = geo.source === "real"
+    ? `Orbit geometry is real: ${geo.satellite} (NORAD ${geo.norad_id}) TLE with epoch ${geo.tle_epoch_utc.slice(0, 10)}, propagated with ${geo.generator.split(" (")[0]} (SGP4); passes over ${geo.station.name} above ${geo.min_elevation_deg}° elevation; eclipses from the JPL DE421 ephemeris. Each seed is a different real day. Satellite resources and data types are illustrative.`
+    : "Synthetic orbit geometry (95-min orbit, 35-min eclipse, clustered passes). Satellite resources and data types are illustrative.";
+
+  // ---------- benchmark ----------
+  const bench = D.benchmark || [];
+  const row = (scenario, policy) => bench.find((r) => r.scenario === scenario && r.policy === policy);
+
+  function renderSeg(id, items, current, onPick) {
+    const el = document.getElementById(id);
+    el.innerHTML = items.map(([k, label]) => `<button type="button" data-k="${k}" aria-pressed="${k === current}">${esc(label)}</button>`).join("");
+    el.onclick = (e) => { const b = e.target.closest("button"); if (b) onPick(b.dataset.k); };
+  }
+
+  function renderBench() {
+    renderSeg("scenario-seg", Object.entries(SCEN), state.scenario, (k) => { state.scenario = k; remember(); renderBench(); });
+    renderSeg("metric-seg", METRICS.map((m) => [m.key, m.label]), state.metric, (k) => { state.metric = k; remember(); renderBench(); });
+    const m = METRICS.find((x) => x.key === state.metric);
+    const rows = POLICIES.map((p) => ({ p, r: row(state.scenario, p) })).filter((x) => x.r);
+    const el = document.getElementById("hbars");
+    if (!rows.length) { el.innerHTML = '<p class="empty">No benchmark results found. Run <code>python -m satsched.cli bench</code> first.</p>'; return; }
+    const maxV = Math.max(...rows.map(({ r }) => (+r[m.key] || 0) + (+r[m.key + "_ci95"] || 0))) * 1.25 || 1;
+    el.innerHTML = rows.map(({ p, r }) => {
+      const v = +r[m.key], ci = +r[m.key + "_ci95"] || 0;
+      const w = Math.max(0, v / maxV * 100), lo = Math.max(0, (v - ci) / maxV * 100), hi = Math.min(100, (v + ci) / maxV * 100);
+      return `<div class="hbar-row"><span class="name"><span class="dot" style="background:${color(p)}"></span>${LABEL[p]}</span>
+        <div class="hbar-track" title="${esc(LABEL[p])}: ${fmt(v, m.fmt)} ± ${fmt(ci, m.fmt)} ${esc(m.unit)}">
+          <div class="hbar" style="width:${w}%;background:${color(p)}"></div>
+          <div class="whisker" style="left:${lo}%;width:${Math.max(hi - lo, 0.3)}%"></div>
+          <span class="hbar-val" style="left:calc(${hi}% + 6px)">${fmt(v, m.fmt)} <span class="muted">± ${fmt(ci, m.fmt)}</span></span>
+        </div></div>`;
+    }).join("");
+    document.getElementById("metric-note").textContent = `${m.label} (${m.unit}), ${m.better} is better. Bars: mean over ${rows[0].r.n_seeds || 20} seeds; whiskers: 95% confidence interval.`;
+    const ours = row(state.scenario, "value_aware");
+    const baselines = ["priority_rules", "process_all", "bent_pipe"].map((p) => row(state.scenario, p)).filter(Boolean);
+    const bestBase = baselines.reduce((a, b) => (+b.value_score_pct > +a.value_score_pct ? b : a));
+    const gain = 100 * (ours.value_score_pct - bestBase.value_score_pct) / bestBase.value_score_pct;
+    const eSave = 100 * (1 - ours.energy_total_wh / bestBase.energy_total_wh);
+    document.getElementById("verdict").innerHTML = `In the <b>${SCEN[state.scenario].toLowerCase()}</b> scenario the value-aware engine captures <b>${gain >= 0 ? "+" : ""}${gain.toFixed(1)}%</b> more value than the best baseline (${SHORT[bestBase.policy].toLowerCase()}) while using <b>${eSave.toFixed(0)}%</b> ${eSave >= 0 ? "less" : "more"} energy.`;
+    document.getElementById("scenario-desc").textContent = (D.scenarios && D.scenarios[state.scenario]) || "";
+    const cols = [["value_score_pct", "Value %", 1], ["completion_rate_pct", "Done %", 1], ["energy_total_wh", "Wh", 0], ["min_soc_pct", "Min batt %", 0], ["alert_latency_mean_min", "Alert min", 0], ["storage_peak_pct", "Peak stor %", 0]];
+    document.getElementById("bench-table").innerHTML = `<thead><tr><th>Strategy</th>${cols.map((c) => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +
+      rows.map(({ p, r }) => `<tr><td><span class="dot" style="background:${color(p)}"></span>${SHORT[p]}</td>${cols.map(([k, , d]) => `<td class="num">${fmt(r[k], d)}</td>`).join("")}</tr>`).join("") + "</tbody>";
+  }
+
+  // ---------- replay charts ----------
+  const S = (p) => D.policies[p].series;
+  const T = S("value_aware").t_min;
+  const tMax = T[T.length - 1] + (T[1] - T[0]);
+  document.getElementById("scrub").max = String(Math.round(tMax));
+  document.getElementById("replay-eyebrow").textContent = `Replay · ${SCEN[D.scenario.name] || D.scenario.name} scenario · seed ${D.seed}`;
+  const CHARTS = [
+    { id: "c-batt", title: "Battery (%)", get: (p) => S(p).soc_wh.map((v) => 100 * v / sat.battery_wh), yMax: 100, ticks: [0, 25, 50, 75, 100], reserve: sat.reserve_frac * 100, digits: 0, unit: "%" },
+    { id: "c-stor", title: "Storage used (%)", get: (p) => S(p).storage_mb.map((v) => 100 * v / sat.storage_mb), yMax: 100, ticks: [0, 25, 50, 75, 100], digits: 0, unit: "%" },
+    { id: "c-val", title: "Value delivered (cumulative)", get: (p) => S(p).value_cum, yMax: null, ticks: null, digits: 0, unit: "" },
+  ];
+  const chartsEl = document.getElementById("charts");
+  chartsEl.innerHTML = CHARTS.map((c) => `<div class="chart" id="${c.id}"></div>`).join("");
+  const idxAt = (min) => Math.max(0, Math.min(T.length - 1, Math.round(min / (T[1] - T[0]))));
+
+  function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v || 1))); for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p; return 10 * p; }
+
+  function drawChart(c) {
+    const el = document.getElementById(c.id);
+    const W = Math.max(320, el.clientWidth || 800), H = 150;
+    const m = { l: 46, r: 14, t: 20, b: 20 };
+    const shown = POLICIES.filter((p) => state.shown.has(p));
+    const data = Object.fromEntries(POLICIES.map((p) => [p, c.get(p)]));
+    const yMax = c.yMax || niceMax(Math.max(1, ...shown.map((p) => Math.max(...data[p]))) * 1.05);
+    const ticks = c.ticks || [0, yMax / 2, yMax];
+    const x = (t) => m.l + (t / tMax) * (W - m.l - m.r);
+    const y = (v) => m.t + (1 - v / yMax) * (H - m.t - m.b);
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.title)} over the day">`;
+    s += `<text class="title" x="${m.l}" y="12">${esc(c.title)}</text>`;
+    for (const [a, b] of D.eclipses) s += `<rect x="${x(a)}" y="${m.t}" width="${Math.max(0, x(b) - x(a))}" height="${H - m.t - m.b}" fill="var(--eclipse)"/>`;
+    for (const [a, b] of D.windows) s += `<rect x="${x(a)}" y="${m.t}" width="${Math.max(1.5, x(b) - x(a))}" height="${H - m.t - m.b}" fill="var(--pass)"/>`;
+    for (const tk of ticks) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(tk)}" y2="${y(tk)}" stroke="var(--line)" stroke-width="1"/><text class="ylab" x="${m.l - 6}" y="${y(tk) + 4}" text-anchor="end">${fmt(tk, 0)}</text>`;
+    for (let h = 0; h <= tMax / 60; h += 3) s += `<text class="ylab" x="${x(h * 60)}" y="${H - 4}" text-anchor="middle">${h}h</text>`;
+    if (c.reserve) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(c.reserve)}" y2="${y(c.reserve)}" stroke="var(--ink-2)" stroke-dasharray="5 4" stroke-width="1"/>`;
+    for (const p of [...shown].reverse()) {
+      const pts = data[p].map((v, i) => `${x(T[i]).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+      s += `<polyline points="${pts}" fill="none" stroke="${color(p)}" stroke-width="2" stroke-linejoin="round"/>`;
+    }
+    s += `<line class="cursor" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="var(--ink)" stroke-width="1"/>`;
+    s += `<g class="marks"></g><rect class="hit" x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent" style="cursor:crosshair"/></svg><div class="tip" hidden></div>`;
+    el.innerHTML = s;
+    el._geo = { x, y, W, H, m, data, shown, c };
+    const hit = el.querySelector(".hit");
+    const pick = (ev) => {
+      const r = el.querySelector("svg").getBoundingClientRect();
+      const px = (ev.clientX - r.left) * (W / r.width);
+      setCursor(Math.max(0, Math.min(tMax, (px - m.l) / (W - m.l - m.r) * tMax)), c.id);
+    };
+    hit.addEventListener("pointermove", pick);
+    hit.addEventListener("pointerdown", pick);
+    hit.addEventListener("pointerleave", () => { el.querySelector(".tip").hidden = true; });
+  }
+
+  function placeCursor(showTipFor) {
+    const i = idxAt(state.cursor);
+    for (const c of CHARTS) {
+      const el = document.getElementById(c.id);
+      const g = el._geo; if (!g) continue;
+      const cx = g.x(T[i]);
+      const line = el.querySelector(".cursor"); line.setAttribute("x1", cx); line.setAttribute("x2", cx);
+      el.querySelector(".marks").innerHTML = g.shown.map((p) => `<circle cx="${cx}" cy="${g.y(g.data[p][i])}" r="4" fill="${color(p)}" stroke="var(--panel)" stroke-width="2"/>`).join("");
+      const tip = el.querySelector(".tip");
+      if (showTipFor === c.id) {
+        tip.hidden = false;
+        tip.innerHTML = `<div class="muted">${tplus(T[i])}</div>` + g.shown.map((p) => `<div><span class="dot" style="background:${color(p)}"></span>${SHORT[p]} ${fmt(g.data[p][i], c.digits)}${c.unit}</div>`).join("");
+        const r = el.getBoundingClientRect();
+        const left = cx / g.W * r.width;
+        tip.style.top = "22px";
+        tip.style.left = left > r.width * 0.62 ? "" : `${left + 12}px`;
+        tip.style.right = left > r.width * 0.62 ? `${r.width - left + 12}px` : "";
+      } else if (showTipFor !== undefined) {
+        tip.hidden = true;
+      }
+    }
+  }
+
+  function renderStatus() {
+    const i = idxAt(state.cursor), s = S("value_aware");
+    document.getElementById("clock").textContent = tplus(T[i]);
+    document.getElementById("scrub").value = String(Math.round(state.cursor));
+    const contact = s.in_contact[i] > 0, sun = s.sunlit[i] > 0;
+    document.getElementById("status").innerHTML = `<span class="pill ${sun ? "" : "dark"}">${sun ? "Sunlit" : "Eclipse"}</span><span class="pill ${contact ? "on" : ""}">${contact ? "Pass in progress" : "No ground contact"}</span>`;
+    const cols = [["Battery", (p) => fmt(100 * S(p).soc_wh[i] / sat.battery_wh, 0) + "%"], ["Storage", (p) => fmt(100 * S(p).storage_mb[i] / sat.storage_mb, 0) + "%"],
+      ["Raw items", (p) => fmt(S(p).n_raw[i], 0)], ["Products", (p) => fmt(S(p).n_product[i], 0)], ["Processing", (p) => fmt(S(p).n_processing[i], 0)], ["Value so far", (p) => fmt(S(p).value_cum[i], 0)]];
+    document.getElementById("cursor-table").innerHTML = `<thead><tr><th>At ${tplus(T[i])}</th>${cols.map((c) => `<th>${c[0]}</th>`).join("")}</tr></thead><tbody>` +
+      POLICIES.filter((p) => state.shown.has(p)).map((p) => `<tr><td><span class="dot" style="background:${color(p)}"></span>${SHORT[p]}</td>${cols.map((c) => `<td class="num">${c[1](p)}</td>`).join("")}</tr>`).join("") + "</tbody>";
+  }
+
+  function setCursor(min, tipFor) {
+    state.cursor = min;
+    placeCursor(tipFor);
+    renderStatus();
+    renderLog();
+  }
+
+  function drawAll() { CHARTS.forEach(drawChart); placeCursor(); renderStatus(); }
+
+  const togglesEl = document.getElementById("policy-toggles");
+  togglesEl.innerHTML = POLICIES.map((p) => `<button type="button" class="chipbtn" data-p="${p}" aria-pressed="${state.shown.has(p)}"><span class="sw" style="background:${color(p)}"></span>${SHORT[p]}</button>`).join("");
+  togglesEl.onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const p = b.dataset.p;
+    if (state.shown.has(p) && state.shown.size > 1) state.shown.delete(p); else state.shown.add(p);
+    togglesEl.querySelectorAll("button").forEach((btn) => btn.setAttribute("aria-pressed", state.shown.has(btn.dataset.p)));
+    drawAll();
+  };
+
+  document.getElementById("scrub").addEventListener("input", (e) => { stop(); setCursor(+e.target.value); });
+  let raf = 0, last = 0;
+  const playBtn = document.getElementById("play");
+  function stop() { state.playing = false; cancelAnimationFrame(raf); playBtn.textContent = "Play"; }
+  function tick(ts) {
+    if (!state.playing) return;
+    const dt = last ? (ts - last) / 1000 : 0; last = ts;
+    let next = state.cursor + dt * 40; // 40 mission minutes per second
+    if (next >= tMax) { next = tMax - 2; setCursor(next); stop(); return; }
+    setCursor(next);
+    raf = requestAnimationFrame(tick);
+  }
+  playBtn.addEventListener("click", () => {
+    if (state.playing) { stop(); return; }
+    if (state.cursor >= tMax - 4) state.cursor = 0;
+    state.playing = true; last = 0; playBtn.textContent = "Pause"; raf = requestAnimationFrame(tick);
+  });
+
+  // ---------- decision log ----------
+  const ACTIONS = [["all", "All"], ["process_start", "Processed"], ["delivered", "Sent"], ["dropped", "Dropped"], ["discarded", "Filtered"]];
+  const ACTION_LABEL = { process_start: "process now", delivered: "delivered", dropped: "dropped", discarded: "filtered", overflow: "overflow", expired: "expired" };
+  function renderLog() {
+    renderSeg("action-seg", ACTIONS, state.actions, (k) => { state.actions = k; renderLog(); });
+    const lo = state.cursor - 45, hi = state.cursor + 45;
+    let items = D.decisions.filter((d) => d.t >= lo && d.t <= hi && (state.actions === "all" || d.action === state.actions));
+    items = items.slice(0, 60);
+    document.getElementById("log-note").textContent = `Decisions between ${tplus(Math.max(0, lo))} and ${tplus(hi)} (move the replay cursor to explore). Each line is the engine's own explanation.`;
+    const el = document.getElementById("log");
+    if (!items.length) { el.innerHTML = '<p class="empty">No decisions of this type in this 90-minute window. Move the cursor to a ground-station pass or pick "All".</p>'; return; }
+    el.innerHTML = items.map((d) => {
+      const why = d.why || (d.action === "discarded" ? "Processed onboard and found useless (cloudy scene / false alarm): nothing to send." : "");
+      const m = why.match(/^(.*?)\s*(\[.*\])?$/);
+      const main = m ? m[1] : why, prices = m && m[2] ? m[2] : "";
+      const val = d.action === "delivered" ? ` <span class="muted mono">+${fmt(d.value, 2)}</span>` : "";
+      return `<div class="log-item"><span class="t">${tplus(d.t)}</span><span class="chip ${d.action}">${ACTION_LABEL[d.action] || d.action}</span>
+        <span class="why"><b>${esc(d.kind.replace(/_/g, " "))}</b> #${d.id}${val} · ${esc(main)}${prices ? `<span class="prices">${esc(prices)}</span>` : ""}</span></div>`;
+    }).join("");
+  }
+
+  // ---------- outcomes ----------
+  const OUT = [
+    ["Delivered, processed", (mm) => mm.delivered_pct - mm.sent_raw_pct, "#1c5cab", "#fff"],
+    ["Delivered, raw", (mm) => mm.sent_raw_pct, "#6da7ec", "#0b0b0b"],
+    ["Filtered onboard", (mm) => mm.discarded_onboard_pct, "#b7d3f6", "#0b0b0b"],
+    ["Lost", (mm) => mm.dropped_pct + mm.overflow_pct + mm.expired_pct, "#8b8a85", "#fff"],
+    ["Still onboard", (mm) => mm.backlog_pct, "#d6d5cf", "#0b0b0b"],
+  ];
+  document.getElementById("stacks").innerHTML = POLICIES.map((p) => {
+    const mm = D.policies[p].metrics;
+    return `<div class="stack-row"><span style="font-size:14px"><span class="dot" style="background:${color(p)}"></span>${SHORT[p]}</span><div class="stack">` +
+      OUT.map(([label, f, bg, fg]) => { const v = Math.max(0, f(mm)); return `<div title="${label}: ${v.toFixed(1)}%" style="flex:${v} 1 0;background:${bg};color:${fg}">${v >= 7 ? v.toFixed(0) + "%" : ""}</div>`; }).join("") + "</div></div>";
+  }).join("");
+  document.getElementById("stack-legend").innerHTML = OUT.map(([label, , bg]) => `<span><i style="background:${bg}"></i>${label}</span>`).join("");
+  const sel = document.getElementById("type-policy");
+  sel.innerHTML = POLICIES.map((p) => `<option value="${p}">${SHORT[p]}</option>`).join("");
+  function renderTypes() {
+    const rows = D.policies[state.typePolicy].per_type;
+    document.getElementById("type-table").innerHTML = `<thead><tr><th>Data type</th><th>Made</th><th>Sent</th><th>Proc.</th><th>Raw</th><th>Value %</th><th>Lat. min</th></tr></thead><tbody>` +
+      rows.map((r) => `<tr><td>${esc(r.data_type.replace(/_/g, " "))}</td><td class="num">${r.generated}</td><td class="num">${r.delivered}</td><td class="num">${r.processed_onboard}</td><td class="num">${r.sent_raw}</td><td class="num">${fmt(r.value_score_pct, 1)}</td><td class="num">${fmt(r.latency_mean_min, 0)}</td></tr>`).join("") + "</tbody>";
+  }
+  sel.addEventListener("change", () => { state.typePolicy = sel.value; renderTypes(); });
+
+  const replayDay = geo.source === "real" ? ` (orbit of ${new Date(Date.parse(geo.start_utc) + D.seed * 86400000).toISOString().slice(0, 10)} UTC)` : "";
+  document.getElementById("foot-data").textContent = `Replay: ${SCEN[D.scenario.name] || D.scenario.name} scenario, seed ${D.seed}${replayDay}, 30-s decision steps shown at 2-min resolution. Benchmark: seeds 0–19 (20 different days), parameters tuned on separate seeds 1000–1003.`;
+
+  renderBench();
+  renderTypes();
+  drawAll();
+  renderLog();
+  let resizeTimer = 0;
+  new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawAll, 120); }).observe(chartsEl);
+})();
+</script>

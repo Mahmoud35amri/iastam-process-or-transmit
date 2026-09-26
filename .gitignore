@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+.venv/
+
+# JPL ephemeris (17 MB) - re-download with: python -m satsched.cli geometry
+data/orbit/*.bsp
